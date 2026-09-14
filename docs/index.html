@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Embudo de Ventas - Latinbien</title>
+<style>
+:root { --azul:#0f3b6e; --naranja:#e07b2a; --gris:#eef1f5; --borde:#d3dae3; }
+* { box-sizing: border-box; }
+body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; background: #f4f6f9; color: #1c2733; }
+header { background: var(--azul); color: #fff; padding: 14px 22px; }
+header h1 { font-size: 18px; margin: 0 0 2px; }
+.sub { font-size: 12px; opacity: .85; }
+main { padding: 20px; max-width: 1200px; margin: 0 auto; }
+.tarjeta { background: #fff; border: 1px solid var(--borde); border-radius: 10px; padding: 16px; margin-bottom: 18px; }
+.tarjeta h2 { margin: 0 0 12px; font-size: 15px; color: var(--azul); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { border-bottom: 1px solid var(--gris); padding: 8px 10px; text-align: left; }
+th { background: #f8fafc; color: #56657a; font-weight: 600; }
+tr.total td { font-weight: 700; background: #f2f7ff; }
+.num { text-align: center; }
+.bar-fondo { background: var(--gris); border-radius: 8px; height: 16px; min-width: 80px; }
+.bar-fondo > i { display:block; height: 16px; border-radius: 8px; background: var(--naranja); font-style: normal; color:#fff; font-size:10px; line-height:16px; padding-left:4px; }
+a.pdf { display:inline-block; margin:0 6px 8px 0; padding:6px 12px; border:1px solid var(--borde); border-radius:6px; text-decoration:none; color:var(--azul); background:#fff; font-size:13px; }
+.nota { font-size: 12px; color: #56657a; }
+.aviso { color:#8a1d1d; font-weight:600; }
+.foot { color:#8a939c; font-size:12px; margin-top:10px; text-align:center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Embudo de Ventas &#8226; Latinbien</h1>
+  <span class="sub">&uacute;ltima sincronizaci&oacute;n: 2026-09-14 15:15:54</span> &nbsp;|&nbsp; <span class="sub">actualizado 2026-09-14 15:22</span>
+</header>
+<main>
+  <section class="tarjeta">
+    <h2>Clientes atendidos por ejecutivo &#8212; dia 14/09/2026</h2>
+    <p class="nota">Columnas: nuevos en CRM, atendidos, actividades de seguimiento, contacto tienda y total del dia.</p>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>Ejecutivo</th><th class="num">Nuevos CRM</th><th class="num">Atendidos</th>
+          <th class="num">Actividades</th><th class="num">Contacto Tienda</th><th class="num">Total</th>
+        </tr></thead>
+        <tbody><tr><td>CLAUDIA MILENA ZAPATA</td><td class='num'>1</td><td class='num'>2</td><td class='num'>0</td><td class='num'>0</td><td class='num'>3</td></tr><tr><td>DANIEL CASTELLANOS</td><td class='num'>0</td><td class='num'>0</td><td class='num'>0</td><td class='num'>0</td><td class='num'>0</td></tr><tr><td>ELIO CHAMATE</td><td class='num'>0</td><td class='num'>1</td><td class='num'>0</td><td class='num'>0</td><td class='num'>1</td></tr><tr><td>GABRIEL ALEJANDRO PARRA MOLINA</td><td class='num'>1</td><td class='num'>3</td><td class='num'>0</td><td class='num'>0</td><td class='num'>4</td></tr><tr><td>LADY DIANA TORO RIVERA</td><td class='num'>1</td><td class='num'>3</td><td class='num'>1</td><td class='num'>0</td><td class='num'>4</td></tr><tr><td>LUIS ANDRES DE JESUS ROJAS RODRIGUEZ</td><td class='num'>0</td><td class='num'>0</td><td class='num'>0</td><td class='num'>0</td><td class='num'>0</td></tr><tr><td>MARIA ALEJANDRA RODRIGUEZ SOJO</td><td class='num'>0</td><td class='num'>0</td><td class='num'>0</td><td class='num'>0</td><td class='num'>0</td></tr><tr><td>MARSOLAIRE ANGULO RANGEL </td><td class='num'>0</td><td class='num'>6</td><td class='num'>1</td><td class='num'>0</td><td class='num'>6</td></tr><tr><td>YOHANA AUDREY LOPEZ</td><td class='num'>0</td><td class='num'>0</td><td class='num'>0</td><td class='num'>0</td><td class='num'>0</td></tr><tr class='total'><td>Total</td><td class='num'>3</td><td class='num'>15</td><td class='num'>2</td><td class='num'>0</td><td class='num'>18</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="tarjeta">
+    <h2>Embudo de ventas del mes (flujo) &#8212; septiembre 2026</h2>
+    <p class="nota">Flujo del mes: movimientos de etapa por ejecutivo. Contacto Tienda y Seguimiento whatsapp se suman del seguimiento/registro local.</p>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Ejecutivo</th><th>Contacto Tienda</th><th>Seguimiento whatsapp Corporativo</th><th>Asignados LC</th><th>Apertura LC</th><th>Oportunidad</th><th>Cierre</th></tr></thead>
+        <tbody><tr><td>CLAUDIA MILENA ZAPATA</td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:12%'>&nbsp;3</i></div></td><td class='num'><div class='bar-fondo'><i style='width:36%'>&nbsp;9</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td></tr><tr><td>DANIEL CASTELLANOS</td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:4%'>&nbsp;1</i></div></td><td class='num'><div class='bar-fondo'><i style='width:16%'>&nbsp;4</i></div></td><td class='num'><div class='bar-fondo'><i style='width:40%'>&nbsp;10</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td></tr><tr><td>ELIO CHAMATE</td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:4%'>&nbsp;1</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:4%'>&nbsp;1</i></div></td></tr><tr><td>GABRIEL ALEJANDRO PARRA MOLINA</td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:60%'>&nbsp;15</i></div></td><td class='num'><div class='bar-fondo'><i style='width:4%'>&nbsp;1</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td></tr><tr><td>LADY DIANA TORO RIVERA</td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:84%'>&nbsp;21</i></div></td><td class='num'><div class='bar-fondo'><i style='width:100%'>&nbsp;25</i></div></td><td class='num'><div class='bar-fondo'><i style='width:8%'>&nbsp;2</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:12%'>&nbsp;3</i></div></td></tr><tr><td>LUIS ANDRES DE JESUS ROJAS RODRIGUEZ</td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:4%'>&nbsp;1</i></div></td><td class='num'><div class='bar-fondo'><i style='width:8%'>&nbsp;2</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td></tr><tr><td>MARIA ALEJANDRA RODRIGUEZ SOJO</td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td></tr><tr><td>MARSOLAIRE ANGULO RANGEL </td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:100%'>&nbsp;25</i></div></td><td class='num'><div class='bar-fondo'><i style='width:36%'>&nbsp;9</i></div></td><td class='num'><div class='bar-fondo'><i style='width:28%'>&nbsp;7</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:12%'>&nbsp;3</i></div></td></tr><tr><td>YOHANA AUDREY LOPEZ</td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:8%'>&nbsp;2</i></div></td><td class='num'><div class='bar-fondo'><i style='width:4%'>&nbsp;1</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td><td class='num'><div class='bar-fondo'><i style='width:0%'>&nbsp;0</i></div></td></tr><tr class='total'><td>Total</td><td class='num'>0</td><td class='num'>47</td><td class='num'>59</td><td class='num'>33</td><td class='num'>0</td><td class='num'>7</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="tarjeta">
+    <h2>Informes PDF del mes</h2>
+    <a class="pdf" href="pdf/EMBUDO_VENTAS_GLOBAL_2026-09.pdf" target="_blank">&#128196; EMBUDO_VENTAS_GLOBAL_2026-09.pdf</a><a class="pdf" href="pdf/EMBUDO_VENTAS_LADY_DIANA_2026-09.pdf" target="_blank">&#128196; EMBUDO_VENTAS_LADY_DIANA_2026-09.pdf</a><a class="pdf" href="pdf/EMBUDO_VENTAS_LADY_DIANA_TORO_2026-09.pdf" target="_blank">&#128196; EMBUDO_VENTAS_LADY_DIANA_TORO_2026-09.pdf</a>
+    <p class="nota" style="margin-top:10px">El tablero interactivo con botones +/− (Contacto Tienda) se abre localmente con dashboard.bat en http://127.0.0.1:8080.</p>
+  </section>
+
+  <div class="foot">Generado automaticamente desde el cache local (solo lectura, sin modificar Odoo).</div>
+</main>
+</body>
+</html>
