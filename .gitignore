@@ -1,0 +1,7 @@
+config.json
+crm_cache.db
+pdf_reports/
+__pycache__/
+*.pyc
+.venv
+venv/

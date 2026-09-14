@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Embudo de Ventas - Latinbien</title>
+<style>
+  :root { --azul:#0f3b6e; --verde:#1e8e5a; --naranja:#e07b2a; --gris:#eef1f5; --borde:#d3dae3; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; background: #f4f6f9; color: #1c2733; }
+  header { background: var(--azul); color: #fff; padding: 14px 22px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; }
+  .sub { font-size: 12px; opacity: .85; }
+  main { padding: 20px; max-width: 1200px; margin: 0 auto; }
+  .barra { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+  .barra input, .barra button, .barra select { font-size: 14px; padding: 7px 10px; border: 1px solid var(--borde); border-radius: 6px; }
+  button { cursor: pointer; }
+  .btn { background: var(--azul); color: #fff; border: none; }
+  .btn:hover { filter: brightness(1.1); }
+  .tarjeta { background: #fff; border: 1px solid var(--borde); border-radius: 10px; padding: 16px; margin-bottom: 18px; }
+  .tarjeta h2 { margin: 0 0 12px; font-size: 15px; color: var(--azul); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { border-bottom: 1px solid var(--gris); padding: 8px 10px; text-align: left; }
+  th { background: #f8fafc; color: #56657a; font-weight: 600; }
+  tr.total td { font-weight: 700; background: #f2f7ff; }
+  .num { text-align: center; font-variant-numeric: tabular-nums; }
+  .b { border-radius:6px; padding: 2px 9px; font-size: 13px; line-height: 1.4; border: 1px solid var(--borde); background:#fff; }
+  .b.mas { color: #fff; background: var(--verde); border-color: var(--verde); }
+  .b.menos { color: #7a1e1e; background: #fdecec; border-color: #f3c2c2; }
+  .pill { display:inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+  .pill.ok { background:#e2f6ea; color:#186a3a; }
+  .pill.no { background:#fdecec; color:#8a1d1d; }
+  .bar-fondo { background: var(--gris); border-radius: 8px; height: 16px; min-width: 100px; position: relative; }
+  .bar-fondo > i { display:block; height: 16px; border-radius: 8px; background: var(--naranja); }
+  .aviso { color:#8a1d1d; font-weight:600; }
+  .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Embudo de Ventas &#8226; Latinbien</h1>
+  <span class="sub" id="estado-sync"></span>
+  <span class="sub">Datos de Odoo en cache local (solo lectura)</span>
+</header>
+
+<main>
+  <div class="barra">
+    <label>Fecha:
+      <input type="date" id="dia">
+    </label>
+    <button id="btn-ver" class="btn">Ver d&iacute;a</button>
+    <span style="flex:1"></span>
+    <label>PDF mensual:
+      <input type="month" id="mes">
+    </label>
+    <button id="btn-pdf" class="btn">Descargar PDF</button>
+  </div>
+
+  <div class="grid2">
+    <section class="tarjeta">
+      <h2>Clientes atendidos por ejecutivo</h2>
+      <table>
+        <thead><tr>
+          <th>Ejecutivo</th><th class="num">Nuevos CRM</th><th class="num">Atendidos</th>
+          <th class="num">Contacto Tienda</th><th class="num">Total</th>
+        </tr></thead>
+        <tbody id="tbody-daily"></tbody>
+      </table>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Embudo de ventas del d&iacute;a</h2>
+      <p class="aviso" id="aviso-embudo" hidden>Sin datos: ejecuta la sincronizaci&oacute;n diaria (sincronizar.bat).</p>
+      <div style="overflow-x:auto">
+        <table>
+          <thead id="thead-funnel"></thead>
+          <tbody id="tbody-funnel"></tbody>
+          <tfoot id="tfoot-funnel"></tfoot>
+        </table>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+async function carga(day) {
+  const r = await fetch("/api/data?day=" + day);
+  const d = await r.json();
+
+  const es = document.getElementById("estado-sync");
+  if (d.last_sync) es.innerHTML = '<span class="pill ' + (d.last_sync.ok ? "ok" : "no") +
+    '">\u00daltima sincronizaci\u00f3n: ' + d.last_sync.run_at + '</span>';
+  else es.textContent = "Sin sincronizaci\u00f3n a\u00fan";
+
+  // panel diario
+  const tb = document.getElementById("tbody-daily");
+  tb.innerHTML = d.daily.map(x => `
+    <tr>
+      <td>${x.nombre}</td>
+      <td class="num">${x.creados}</td>
+      <td class="num">${x.atendidos}</td>
+      <td class="num">
+        <button class="b menos" data-u="${x.uid}" data-del="-1">&#8722;</button>
+        <b id="ct-${x.uid}">${x.tienda}</b>
+        <button class="b mas" data-u="${x.uid}" data-d="1">+</button>
+      </td>
+      <td class="num">${x.total}</td>
+    </tr>`).join("");
+
+  const t = d.daily_total;
+  tb.insertAdjacentHTML("beforeend",
+    `<tr class="total"><td>Total</td><td class="num">${t.creados}</td><td class="num">${t.atendidos}</td>
+     <td class="num">${t.tienda}</td><td class="num">${t.total}</td></tr>`);
+
+  // embudo
+  const th = document.getElementById("thead-funnel");
+  th.innerHTML = "<tr>" + d.funnel_header.map(h => "<th>" + h + "</th>").join("") + "</tr>";
+  const tbf = document.getElementById("tbody-funnel");
+  const maxf = Math.max(1, ...d.funnel_rows.flatMap(r => d.funnel_header.slice(1).map(s => r[s] || 0)));
+  tbf.innerHTML = d.funnel_rows.map(r => {
+    const celdas = d.funnel_header.slice(1).map(s => {
+      const v = r[s] || 0;
+      return `<td class="num"><div class="bar-fondo"><i style="width:${Math.round(v / maxf * 100)}%">&nbsp;${v}</i></div></td>`;
+    }).join("");
+    return `<tr><td>${r.nombre}</td>${celdas}</tr>`;
+  }).join("");
+
+  const tf = document.getElementById("tfoot-funnel");
+  if (d.funnel_rows.length) {
+    tf.innerHTML = "<tr class='total'><td>Total</td>" +
+      d.funnel_header.slice(1).map(s => `<td class="num">${d.funnel_total[s] || 0}</td>`).join("") + "</tr>";
+  }
+
+  document.getElementById("aviso-embudo").hidden = d.funnel_rows.length > 0;
+}
+
+async function btnTienda(uid, delta, day) {
+  const r = await fetch("/api/store_contact", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({day, odoo_uid: uid, delta})
+  });
+  const j = await r.json();
+  document.getElementById("ct-" + j.odoo_uid).textContent = j.count;
+  carga(day);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const hoy = new Date().toISOString().slice(0, 10);
+  document.getElementById("dia").value = hoy;
+  document.getElementById("mes").value = hoy.slice(0, 7);
+  carga(hoy);
+
+  document.getElementById("btn-ver").onclick = () => carga(document.getElementById("dia").value);
+  document.getElementById("dia").onchange = () => carga(document.getElementById("dia").value);
+
+  document.getElementById("tbody-daily").addEventListener("click", e => {
+    const btn = e.target.closest("button[data-u]");
+    if (!btn) return;
+    const delta = parseInt(btn.dataset.d || btn.dataset.del, 10);
+    btnTienda(parseInt(btn.dataset.u, 10), delta, document.getElementById("dia").value);
+  });
+
+  document.getElementById("btn-pdf").onclick = () => {
+    const mes = document.getElementById("mes").value;
+    window.open("/api/pdf?month=" + mes, "_blank");
+  };
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "odoo": {
+    "url": "https://tu-odoo.latinbien.com",
+    "db": "latinbien",
+    "user": "admin",
+    "api_key": "TU_API_KEY"
+  },
+  "timezone": "America/Caracas",
+  "funnel_stages": [
+    "Contacto Tienda",
+    "Seguimiento whatsapp Corporativo",
+    "Asignados LC",
+    "Apertura LC",
+    "Oportunidad",
+    "Cierre"
+  ],
+  "executives": [],
+  "sqlite_path": "crm_cache.db",
+  "pdf_output_dir": "pdf_reports"
+}
