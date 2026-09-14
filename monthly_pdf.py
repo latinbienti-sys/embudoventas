@@ -49,6 +49,13 @@ def generate_monthly_pdf(cfg, year, month, executive=None, out_path=None):
     month_end = date(year, month, last_day)
 
     execs = store.get_executives(db)
+    exclude = {store.normalize(e) for e in cfg.get("executives_exclude", [])}
+    execs = [e for e in execs if store.normalize(e["name"]) not in exclude]
+    active = [store.normalize(e) for e in cfg.get("executives_active", [])]
+    if active:
+        execs = [e for e in execs
+                 if any(t in store.normalize(e["name"]) or store.normalize(e["name"]) in t
+                        for t in active)]
     if executive:
         execs = [e for e in execs if executive.lower() in e["name"].lower()]
     if not execs:
@@ -60,6 +67,12 @@ def generate_monthly_pdf(cfg, year, month, executive=None, out_path=None):
     tienda_sum = {}
     for r in tienda_rows:
         tienda_sum[r["odoo_uid"]] = tienda_sum.get(r["odoo_uid"], 0) + r["count"]
+    act_rows = store.get_activities_daily_range(db, month_start, month_end)
+    act_sum = {}
+    for r in act_rows:
+        act_sum[r["odoo_uid"]] = act_sum.get(r["odoo_uid"], 0) + r["count"]
+    move_rows = store.get_stage_moves_month(db, year, month)
+    moves = {(r["odoo_uid"], r["stage"]): r["count"] for r in move_rows}
 
     created = store.get_created_daily_range(db, month_start, month_end)
     touched = store.get_touched_daily_range(db, month_start, month_end)
@@ -84,9 +97,12 @@ def generate_monthly_pdf(cfg, year, month, executive=None, out_path=None):
         for e in execs:
             fila = [e["name"]]
             for st in stages:
-                v = funnel.get((e["odoo_uid"], st), 0)
                 if st == "Contacto Tienda":
-                    v = tienda_sum.get(e["odoo_uid"], v)
+                    v = tienda_sum.get(e["odoo_uid"], 0)
+                elif st == "Seguimiento whatsapp Corporativo":
+                    v = act_sum.get(e["odoo_uid"], 0)
+                else:
+                    v = moves.get((e["odoo_uid"], st), 0)
                 fila.append(v)
             matriz.append(fila)
         totales = ["TOTAL"] + [sum(f[i] for f in matriz) for i in range(1, len(stages) + 1)]

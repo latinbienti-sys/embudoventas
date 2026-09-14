@@ -14,7 +14,23 @@
     "Oportunidad",
     "Cierre"
   ],
+  "stage_mapping": {
+    "Contacto Tienda": [],
+    "Seguimiento whatsapp Corporativo": [],
+    "Asignados LC": ["Prospecto LC", "Contacto LC", "Contacto Venta de Mercancia", "Asesoria LC"],
+    "Apertura LC": ["Proceso LC", "Seguimiento 01", "Seguimiento 02", "Seguimiento 03", "Negociacion Venta de Producto"],
+    "Oportunidad": ["LC Aprobada", "Contrato", "LCA - Completada por facturar"],
+    "Cierre": ["Facturado", "Contado"]
+  },
   "executives": [],
+  "executives_active": [],
+  "executives_exclude": [
+    "ADMIN EQUIPO",
+    "BASE DE DATOS PROSPECTOS",
+    "MIGRACION 1.0",
+    "POOL ASESORES RETIRADOS",
+    "PROYECTO ERP"
+  ],
   "sqlite_path": "crm_cache.db",
   "pdf_output_dir": "pdf_reports"
 }

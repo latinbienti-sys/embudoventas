@@ -29,39 +29,63 @@ app = Flask(__name__)
 tz = ZoneInfo(cfg.get("timezone", "America/Caracas"))
 
 
+def _active_execs():
+    """Solo ejecutivos activos configurados (whitelist executives_active)."""
+    exclude = {store.normalize(e) for e in cfg.get("executives_exclude", [])}
+    active = [store.normalize(e) for e in cfg.get("executives_active", [])]
+    execs = [e for e in store.get_executives(cfg["sqlite_path"])
+             if store.normalize(e["name"]) not in exclude]
+    if active:
+        execs = [e for e in execs
+                 if any(t in store.normalize(e["name"]) or store.normalize(e["name"]) in t
+                        for t in active)]
+    return execs
+
+
 def build_daily_panel(day: date):
     """Tabla diaria por ejecutivo."""
-    execs = store.get_executives(cfg["sqlite_path"])
+    execs = _active_execs()
     touched = {r["odoo_uid"]: r["count"] for r in
                store.get_touched_daily_range(cfg["sqlite_path"], day, day)}
     created = {r["odoo_uid"]: r["count"] for r in
                store.get_created_daily_range(cfg["sqlite_path"], day, day)}
     tienda = {r["odoo_uid"]: r["count"] for r in
               store.get_store_contacts_range(cfg["sqlite_path"], day, day)}
+    actividades = {r["odoo_uid"]: r["count"] for r in
+                   store.get_activities_daily_range(cfg["sqlite_path"], day, day)}
 
     rows = []
-    total = {"creados": 0, "atendidos": 0, "tienda": 0, "total": 0}
+    total = {"creados": 0, "atendidos": 0, "tienda": 0, "actividades": 0, "total": 0}
     for e in execs:
         c = created.get(e["odoo_uid"], 0)
         t = touched.get(e["odoo_uid"], 0)
         s = tienda.get(e["odoo_uid"], 0)
+        a = actividades.get(e["odoo_uid"], 0)
         total["creados"] += c
         total["atendidos"] += t
         total["tienda"] += s
+        total["actividades"] += a
         total["total"] += c + t + s
         rows.append({"nombre": e["name"], "uid": e["odoo_uid"], "creados": c,
-                     "atendidos": t, "tienda": s, "total": c + t + s})
+                     "atendidos": t, "tienda": s, "actividades": a, "total": c + t + s})
     return rows, total
 
 
 def build_funnel(day: date):
-    """Embudo del dia: etapa x ejecutivo."""
-    execs = store.get_executives(cfg["sqlite_path"])
-    snap = {(r["odoo_uid"], r["stage"]): r["count"] for r in
-            store.get_funnel_snapshot(cfg["sqlite_path"], day)}
-    # contacto tienda se suma desde el contador local del dia
-    tienda = {r["odoo_uid"]: r["count"] for r in
-              store.get_store_contacts_range(cfg["sqlite_path"], day, day)}
+    """Embudo del MES (flujo): movimientos por etapa desde el dia seleccionado."""
+    execs = _active_execs()
+    month_start = day.replace(day=1)
+    month_end = month_start.replace(day=28) + timedelta(days=4)
+    month_end = month_end - timedelta(days=month_end.day)
+
+    moves = {(r["odoo_uid"], r["stage"]): r["count"] for r in
+             store.get_stage_moves_month(cfg["sqlite_path"], day.year, day.month)}
+    tienda = {}
+    for r in store.get_store_contacts_range(cfg["sqlite_path"], month_start, month_end):
+        tienda[r["odoo_uid"]] = tienda.get(r["odoo_uid"], 0) + r["count"]
+    actividades = {}
+    for r in store.get_activities_daily_range(cfg["sqlite_path"], month_start, month_end):
+        actividades[r["odoo_uid"]] = actividades.get(r["odoo_uid"], 0) + r["count"]
 
     stages = cfg.get("funnel_stages", [])
     header = ["Ejecutivo"] + stages
@@ -70,12 +94,15 @@ def build_funnel(day: date):
     for e in execs:
         row = {"nombre": e["name"], "uid": e["odoo_uid"]}
         for st in stages:
-            v = snap.get((e["odoo_uid"], st), 0)
-            if st == "Contacto Tienda" and not v:
+            if st == "Contacto Tienda":
                 v = tienda.get(e["odoo_uid"], 0)
-            row[st] = sum if isinstance(v, list) else v if isinstance(v, int) else (v or 0)
-            if isinstance(row[st], int):
-                totals[st] += row[st]
+            elif st == "Seguimiento whatsapp Corporativo":
+                v = actividades.get(e["odoo_uid"], 0)
+            else:
+                v = moves.get((e["odoo_uid"], st), 0)
+            v = v or 0
+            row[st] = v
+            totals[st] += v
         rows.append(row)
     return header, rows, totals
 

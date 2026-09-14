@@ -59,6 +59,7 @@ def main():
     # ---------- Etapas ----------
     stage_map = client.get_stages()
     stage_names = cfg.get("funnel_stages", [])
+    stage_mapping = cfg.get("stage_mapping", {}) or {s: [s] for s in stage_names}
     print("Etapas CRM:", len(stage_map), "| Etapas del embudo configuradas:", len(stage_names))
 
     # ---------- Rango de dias a procesar ----------
@@ -80,15 +81,28 @@ def main():
         touched = client.get_lead_touched_in_range(
             day, day + timedelta(days=1), ["id", "user_id", "create_date", "write_date"]
         )
+        activities = client.get_activities_in_range(day, day + timedelta(days=1))
+        moves, tracking = client.get_stage_moves_in_range(day, day + timedelta(days=1))
 
-        funnel = OdooClient.funnel_from_leads(all_leads, stage_map, stage_names, tz)
+        funnel, unmapped = OdooClient.funnel_from_leads(
+            all_leads, stage_map, stage_names, stage_mapping, tz)
         store.upsert_funnel_snapshot(cfg["sqlite_path"], day, funnel)
+        if unmapped and d == 0:
+            print("  AVISO: etapas CRM sin mapear en embudo:", sorted(unmapped))
 
         by_day_c = OdooClient.created_by_day(created, tz)
         by_day_t = OdooClient.touched_by_day(touched, tz)
+        by_day_a = OdooClient.activities_by_day(activities, tz)
+        by_day_m = OdooClient.moves_by_day(moves, tracking, stage_mapping, stage_names, tz)
         store.upsert_created_daily(cfg["sqlite_path"], by_day_c, tz)
         store.upsert_touched_daily(cfg["sqlite_path"], by_day_t, tz)
-        print(f"  {day}: funnel ok | creados {sum(v for u in by_day_c.values() for v in u.values())} | atendidos {sum(v for u in by_day_t.values() for v in u.values())}")
+        store.upsert_activities_daily(cfg["sqlite_path"], by_day_a, tz)
+        store.upsert_stage_moves(cfg["sqlite_path"], by_day_m, tz)
+        total_a = sum(v for u in by_day_a.values() for v in u.values())
+        total_c = sum(v for u in by_day_c.values() for v in u.values())
+        total_t = sum(v for u in by_day_t.values() for v in u.values())
+        total_m = sum(c for u in by_day_m.values() for s in u.values() for c in s.values())
+        print(f"  {day}: funnel ok | creados {total_c} | atendidos {total_t} | actividades {total_a} | movimientos {total_m}")
 
     store.log_sync(cfg["sqlite_path"], True, f"sincronizado {since} -> {until}")
     print("Listo. Datos guardados en", cfg["sqlite_path"])

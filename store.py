@@ -2,8 +2,17 @@
 """Capa SQLite local. NO toca Odoo."""
 
 import sqlite3
+import unicodedata
 from contextlib import closing
 from datetime import date
+
+
+def normalize(texto):
+    """Minusculas y sin acentos, para comparar nombres (Asesoria = Asesoría)."""
+    if not texto:
+        return ""
+    s = unicodedata.normalize("NFKD", str(texto))
+    return "".join(ch for ch in s if not unicodedata.combining(ch)).lower().strip()
 
 
 def get_conn(path):
@@ -43,6 +52,21 @@ def init_db(path):
                 odoo_uid    INTEGER NOT NULL,
                 count       INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (day, odoo_uid)
+            );
+
+            CREATE TABLE IF NOT EXISTS activities_daily (
+                day         TEXT NOT NULL,
+                odoo_uid    INTEGER NOT NULL,
+                count       INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (day, odoo_uid)
+            );
+
+            CREATE TABLE IF NOT EXISTS stage_moves (
+                day         TEXT NOT NULL,
+                odoo_uid    INTEGER NOT NULL,
+                stage       TEXT NOT NULL,
+                count       INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (day, odoo_uid, stage)
             );
 
             CREATE TABLE IF NOT EXISTS store_contacts (
@@ -121,6 +145,30 @@ def upsert_touched_daily(path, by_day, tz):
         c.commit()
 
 
+def upsert_activities_daily(path, by_day, tz):
+    with closing(get_conn(path)) as c:
+        for day, counts in by_day.items():
+            for uid, cnt in counts.items():
+                c.execute(
+                    "INSERT OR REPLACE INTO activities_daily (day, odoo_uid, count) VALUES (?,?,?)",
+                    (day.isoformat(), int(uid or 0), int(cnt)),
+                )
+        c.commit()
+
+
+def upsert_stage_moves(path, by_day, tz):
+    """by_day: {dia: {uid: {etapa_embudo: n}}} movimientos de etapa."""
+    with closing(get_conn(path)) as c:
+        for day, users in by_day.items():
+            for uid, stages in users.items():
+                for stage, cnt in stages.items():
+                    c.execute(
+                        "INSERT OR REPLACE INTO stage_moves (day, odoo_uid, stage, count) VALUES (?,?,?,?)",
+                        (day.isoformat(), int(uid or 0), stage, int(cnt)),
+                    )
+        c.commit()
+
+
 def increment_store_contact(path, day, odoo_uid, delta=1):
     """Botón del tablero: suma/resta contacto tienda en cache local."""
     with closing(get_conn(path)) as c:
@@ -187,6 +235,32 @@ def get_touched_daily_range(path, start, end):
     with closing(get_conn(path)) as c:
         return [dict(r) for r in c.execute(
             "SELECT day, odoo_uid, count FROM touched_daily WHERE day BETWEEN ? AND ?",
+            (start.isoformat(), end.isoformat()),
+        )]
+
+
+def get_activities_daily_range(path, start, end):
+    with closing(get_conn(path)) as c:
+        return [dict(r) for r in c.execute(
+            "SELECT day, odoo_uid, count FROM activities_daily WHERE day BETWEEN ? AND ?",
+            (start.isoformat(), end.isoformat()),
+        )]
+
+
+def get_stage_moves_month(path, year, month):
+    """Movimientos de etapa (flujo) del mes, sumados por (ejecutivo, etapa)."""
+    with closing(get_conn(path)) as c:
+        return [dict(r) for r in c.execute(
+            "SELECT odoo_uid, stage, SUM(count) AS count FROM stage_moves "
+            "WHERE day BETWEEN ? AND ? GROUP BY odoo_uid, stage",
+            (f"{year}-{month:02d}-01", f"{year}-{month:02d}-31"),
+        )]
+
+
+def get_stage_moves_range(path, start, end):
+    with closing(get_conn(path)) as c:
+        return [dict(r) for r in c.execute(
+            "SELECT day, odoo_uid, stage, count FROM stage_moves WHERE day BETWEEN ? AND ?",
             (start.isoformat(), end.isoformat()),
         )]
 

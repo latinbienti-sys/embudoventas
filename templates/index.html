@@ -63,14 +63,14 @@
       <table>
         <thead><tr>
           <th>Ejecutivo</th><th class="num">Nuevos CRM</th><th class="num">Atendidos</th>
-          <th class="num">Contacto Tienda</th><th class="num">Total</th>
+          <th class="num">Actividades</th><th class="num">Contacto Tienda</th><th class="num">Total</th>
         </tr></thead>
         <tbody id="tbody-daily"></tbody>
       </table>
     </section>
 
     <section class="tarjeta">
-      <h2>Embudo de ventas del d&iacute;a</h2>
+      <h2>Embudo de ventas del mes (flujo)</h2>
       <p class="aviso" id="aviso-embudo" hidden>Sin datos: ejecuta la sincronizaci&oacute;n diaria (sincronizar.bat).</p>
       <div style="overflow-x:auto">
         <table>
@@ -100,6 +100,7 @@ async function carga(day) {
       <td>${x.nombre}</td>
       <td class="num">${x.creados}</td>
       <td class="num">${x.atendidos}</td>
+      <td class="num">${x.actividades}</td>
       <td class="num">
         <button class="b menos" data-u="${x.uid}" data-del="-1">&#8722;</button>
         <b id="ct-${x.uid}">${x.tienda}</b>
@@ -111,7 +112,7 @@ async function carga(day) {
   const t = d.daily_total;
   tb.insertAdjacentHTML("beforeend",
     `<tr class="total"><td>Total</td><td class="num">${t.creados}</td><td class="num">${t.atendidos}</td>
-     <td class="num">${t.tienda}</td><td class="num">${t.total}</td></tr>`);
+     <td class="num">${t.actividades}</td><td class="num">${t.tienda}</td><td class="num">${t.total}</td></tr>`);
 
   // embudo
   const th = document.getElementById("thead-funnel");
