@@ -155,6 +155,46 @@ def build_gestion(day: date):
     }
 
 
+def build_cierre(day: date):
+    """Cierre de la jornada por ejecutivo: prospectados, atendidos, cierres y venta del dia."""
+    execs = _active_execs()
+    daily = {r["uid"]: r for r in build_daily_panel(day)[0]}
+    moves_hoy = {}
+    for r in store.get_stage_moves_range(cfg["sqlite_path"], day, day):
+        moves_hoy.setdefault(r["odoo_uid"], {})[r["stage"]] = r["count"]
+    venta_dia = {}
+    for r in store.get_ventas_daily_range(cfg["sqlite_path"], day, day):
+        venta_dia[r["odoo_uid"]] = venta_dia.get(r["odoo_uid"], 0) + r["amount"]
+    stages = cfg.get("funnel_stages", [])
+    etiqueta_cierre = None
+    for s in stages:
+        if "cierre" in store.normalize(s):
+            etiqueta_cierre = s
+            break
+
+    rows = []
+    tot = {"prospect": 0, "atendidos": 0, "tienda": 0, "cierres": 0, "venta": 0.0}
+    for e in execs:
+        dr = daily.get(e["odoo_uid"])
+        cierres = (moves_hoy.get(e["odoo_uid"], {}) or {}).get(etiqueta_cierre, 0) if etiqueta_cierre else 0
+        venta = venta_dia.get(e["odoo_uid"], 0) or 0
+        row = {
+            "nombre": e["name"],
+            "prospect": (dr["creados"] if dr else 0),
+            "atendidos": (dr["atendidos"] if dr else 0),
+            "tienda": (dr["tienda"] if dr else 0),
+            "cierres": cierres or 0,
+            "venta": venta,
+        }
+        rows.append(row)
+        tot["prospect"] += row["prospect"]
+        tot["atendidos"] += row["atendidos"]
+        tot["tienda"] += row["tienda"]
+        tot["cierres"] += row["cierres"]
+        tot["venta"] += venta
+    return {"rows": rows, "total": tot}
+
+
 def build_vista(day: date):
     """Vista por ejecutivo (como el PDF del mes): embudo + diario + venta."""
     execs = _active_execs()
@@ -245,6 +285,7 @@ def api_data():
     header, funnel_rows, funnel_total = build_funnel(day)
     gestion = build_gestion(day)
     vista = build_vista(day)
+    cierre = build_cierre(day)
     if not store.last_snapshot_date(cfg["sqlite_path"]):
         funnel_rows = []
     last_sync = store.last_sync_ok(cfg["sqlite_path"])
@@ -257,6 +298,7 @@ def api_data():
         "funnel_total": funnel_total,
         "gestion": gestion,
         "vista": vista,
+        "cierre": cierre,
         "last_sync": last_sync,
     })
 

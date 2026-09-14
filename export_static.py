@@ -71,6 +71,7 @@ def main():
     daily, daily_total = dashboard_app.build_daily_panel(dia)
     header, funnel, funnel_total = dashboard_app.build_funnel(dia)
     gestion = dashboard_app.build_gestion(dia)
+    cierre = dashboard_app.build_cierre(dia)
     last_sync = store.last_sync_ok(dashboard_app.cfg["sqlite_path"])
     ahora = datetime.now().strftime("%Y-%m-%d %H:%M")
 
@@ -131,6 +132,24 @@ def main():
     v = gestion["ventas"]
     venta_txt = (f"Venta del mes (Cierre): <b>US${v['logrado']:,.0f}</b> &middot; "
                  f"Meta: US${v['meta']:,.0f} &middot; Pendiente: US${v['pendiente']:,.0f}")
+
+    t = cierre["total"]
+    cierre_txt = (f"Resultado de la jornada del {dia.strftime('%d/%m/%Y')}: "
+                  f"prospectaron <b>{t['prospect']}</b>, atendieron <b>{t['atendidos']}</b>, "
+                  f"cerraron <b>{t['cierres']}</b>.")
+    filas_cierre = ""
+    for r in cierre["rows"]:
+        filas_cierre += (
+            f"<tr><td>{esc(r['nombre'])}</td><td class='num'>{r['prospect']}</td>"
+            f"<td class='num'>{r['atendidos']}</td><td class='num'>{r['tienda']}</td>"
+            f"<td class='num'><b style='color:{'#1e8e5a' if r['cierres'] else '#0f3b6e'}'>{r['cierres']}</b></td>"
+            f"<td class='num'>US${r['venta']:,.2f}</td></tr>"
+        )
+    filas_cierre += (
+        f"<tr class='total'><td>Total</td><td class='num'>{t['prospect']}</td>"
+        f"<td class='num'>{t['atendidos']}</td><td class='num'>{t['tienda']}</td>"
+        f"<td class='num'>{t['cierres']}</td><td class='num'>US${t['venta']:,.2f}</td></tr>"
+    )
 
     # ---- enlaces PDF ----
     pdf_html = "".join(
@@ -239,6 +258,21 @@ def main():
         <thead><tr><th>Ejecutivo</th>{''.join(f'<th>{esc(s)}</th>' for s in gs)}</tr>
           <tr class='total'><th>Meta diaria</th>{''.join(f'<th class="num">{mg[s]}</th>' for s in gs)}</tr></thead>
         <tbody>{filas_gestion}<tr class='total'><td>Total logrado hoy</td>{tot_log}</tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="tarjeta">
+    <h2>Cierre del d&iacute;a por ejecutivo &#8212; {esc(dia_txt)}</h2>
+    <p class="nota">{cierre_txt}</p>
+    <p class="nota">Prospectados = nuevos CRM del d&iacute;a; Atendidos = clientes con actividad; Cierres = leads que pasaron a Cierre; Venta del d&iacute;a = monto de esos cierres.</p>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>Ejecutivo</th><th class="num">Prospectados</th><th class="num">Atendidos</th>
+          <th class="num">Contacto Tienda</th><th class="num">Cierres</th><th class="num">Venta del d&iacute;a</th>
+        </tr></thead>
+        <tbody>{filas_cierre}</tbody>
       </table>
     </div>
   </section>

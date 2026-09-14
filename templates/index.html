@@ -111,6 +111,20 @@
   </section>
 
   <section class="tarjeta">
+    <h2>Cierre del d&iacute;a por ejecutivo</h2>
+    <p class="nota" id="cierre-nota"></p>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>Ejecutivo</th><th class="num">Prospectados</th><th class="num">Atendidos</th>
+          <th class="num">Contacto Tienda</th><th class="num">Cierres</th><th class="num">Venta del d&iacute;a</th>
+        </tr></thead>
+        <tbody id="tbody-cierre"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="tarjeta">
     <h2>Vista por ejecutivo (como el PDF del mes)</h2>
     <div class="pestanas" id="pestanas"></div>
     <div id="panel-vista"></div>
@@ -197,6 +211,28 @@ async function carga(day) {
     `Venta del mes (Cierre): <b>US$${Number(v.logrado||0).toLocaleString("en-US")}</b> ` +
     `&middot; Meta: US$${Number(v.meta||0).toLocaleString("en-US")} ` +
     `&middot; Pendiente: US$${Number(v.pendiente||0).toLocaleString("en-US")}`;
+
+  // cierre del dia
+  const c = d.cierre || {rows: [], total: null};
+  const tbc = document.getElementById("tbody-cierre");
+  tbc.innerHTML = c.rows.map(x => `
+    <tr>
+      <td>${x.nombre}</td>
+      <td class="num">${x.prospect}</td>
+      <td class="num">${x.atendidos}</td>
+      <td class="num">${x.tienda}</td>
+      <td class="num"><b style="color:${x.cierres ? "#1e8e5a" : "#0f3b6e"}">${x.cierres}</b></td>
+      <td class="num"><b>US$${Number(x.venta||0).toLocaleString("en-US", {maximumFractionDigits:2})}</b></td>
+    </tr>`).join("");
+  if (c.total) {
+    tbc.insertAdjacentHTML("beforeend",
+      `<tr class="total"><td>Total</td><td class="num">${c.total.prospect}</td><td class="num">${c.total.atendidos}</td>
+       <td class="num">${c.total.tienda}</td><td class="num">${c.total.cierres}</td>
+       <td class="num">US$${Number(c.total.venta).toLocaleString("en-US", {maximumFractionDigits:2})}</td></tr>`);
+  }
+  document.getElementById("cierre-nota").innerHTML =
+    `Resultado de la jornada del <b>${d.dia}</b>: prospectaron <b>${c.total ? c.total.prospect : 0}</b>, ` +
+    `atendieron <b>${c.total ? c.total.atendidos : 0}</b>, cerraron <b>${c.total ? c.total.cierres : 0}</b>.`;
 
   // PDFs del mes
   const mes = document.getElementById("mes").value;
