@@ -126,6 +126,7 @@ def upsert_funnel_snapshot(path, snap_date: date, funnel_by_stage):
 def upsert_created_daily(path, by_day, tz):
     with closing(get_conn(path)) as c:
         for day, counts in by_day.items():
+            c.execute("DELETE FROM created_daily WHERE day=?", (day.isoformat(),))
             for uid, cnt in counts.items():
                 c.execute(
                     "INSERT OR REPLACE INTO created_daily (day, odoo_uid, count) VALUES (?,?,?)",
@@ -137,6 +138,7 @@ def upsert_created_daily(path, by_day, tz):
 def upsert_touched_daily(path, by_day, tz):
     with closing(get_conn(path)) as c:
         for day, counts in by_day.items():
+            c.execute("DELETE FROM touched_daily WHERE day=?", (day.isoformat(),))
             for uid, cnt in counts.items():
                 c.execute(
                     "INSERT OR REPLACE INTO touched_daily (day, odoo_uid, count) VALUES (?,?,?)",
@@ -148,6 +150,7 @@ def upsert_touched_daily(path, by_day, tz):
 def upsert_activities_daily(path, by_day, tz):
     with closing(get_conn(path)) as c:
         for day, counts in by_day.items():
+            c.execute("DELETE FROM activities_daily WHERE day=?", (day.isoformat(),))
             for uid, cnt in counts.items():
                 c.execute(
                     "INSERT OR REPLACE INTO activities_daily (day, odoo_uid, count) VALUES (?,?,?)",
@@ -160,6 +163,7 @@ def upsert_stage_moves(path, by_day, tz):
     """by_day: {dia: {uid: {etapa_embudo: n}}} movimientos de etapa."""
     with closing(get_conn(path)) as c:
         for day, users in by_day.items():
+            c.execute("DELETE FROM stage_moves WHERE day=?", (day.isoformat(),))
             for uid, stages in users.items():
                 for stage, cnt in stages.items():
                     c.execute(

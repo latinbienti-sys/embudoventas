@@ -54,6 +54,9 @@ def main():
             execs.append({"id": 0, "name": name})
     store.upsert_executives(cfg["sqlite_path"], execs)
     store.mark_executives_inactive(cfg["sqlite_path"], [e["id"] for e in execs if e["id"]])
+    # Indice por nombre normalizado para atribuir los movimientos (el autor es
+    # un res.partner, no un res.users).
+    name2uid = {store.normalize(e["name"]): e["id"] for e in execs if e["id"]}
     print(f"Ejecutivos detectados: {len(execs)}")
 
     # ---------- Etapas ----------
@@ -82,7 +85,7 @@ def main():
             day, day + timedelta(days=1), ["id", "user_id", "create_date", "write_date"]
         )
         activities = client.get_activities_in_range(day, day + timedelta(days=1))
-        moves, tracking = client.get_stage_moves_in_range(day, day + timedelta(days=1))
+        moves, tracking, authors = client.get_stage_moves_in_range(day, day + timedelta(days=1))
 
         funnel, unmapped = OdooClient.funnel_from_leads(
             all_leads, stage_map, stage_names, stage_mapping, tz)
@@ -93,15 +96,26 @@ def main():
         by_day_c = OdooClient.created_by_day(created, tz)
         by_day_t = OdooClient.touched_by_day(touched, tz)
         by_day_a = OdooClient.activities_by_day(activities, tz)
-        by_day_m = OdooClient.moves_by_day(moves, tracking, stage_mapping, stage_names, tz)
+        by_day_m = OdooClient.moves_by_day(moves, tracking, stage_mapping, stage_names, tz, authors)
+        # Reagrupa movimientos por UID del ejecutivo (via nombre del autor).
+        by_day_m_uid = {}
+        for day, users in by_day_m.items():
+            for auto_nombre, stages in users.items():
+                uid = name2uid.get(auto_nombre)
+                if not uid:
+                    continue  # autor sin ejecutivo activo: se omite
+                by_day_m_uid.setdefault(day, {})[uid] = {
+                    s: by_day_m_uid.get(day, {}).get(uid, {}).get(s, 0) + cnt
+                    for s, cnt in stages.items()
+                }
         store.upsert_created_daily(cfg["sqlite_path"], by_day_c, tz)
         store.upsert_touched_daily(cfg["sqlite_path"], by_day_t, tz)
         store.upsert_activities_daily(cfg["sqlite_path"], by_day_a, tz)
-        store.upsert_stage_moves(cfg["sqlite_path"], by_day_m, tz)
+        store.upsert_stage_moves(cfg["sqlite_path"], by_day_m_uid, tz)
         total_a = sum(v for u in by_day_a.values() for v in u.values())
         total_c = sum(v for u in by_day_c.values() for v in u.values())
         total_t = sum(v for u in by_day_t.values() for v in u.values())
-        total_m = sum(c for u in by_day_m.values() for s in u.values() for c in s.values())
+        total_m = sum(c for u in by_day_m_uid.values() for s in u.values() for c in s.values())
         print(f"  {day}: funnel ok | creados {total_c} | atendidos {total_t} | actividades {total_a} | movimientos {total_m}")
 
     store.log_sync(cfg["sqlite_path"], True, f"sincronizado {since} -> {until}")

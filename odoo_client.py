@@ -79,10 +79,21 @@ class OdooClient:
         raise RuntimeError(f"No se pudo contactar Odoo tras {self.retries} intentos: {last_err}")
 
     def connect(self):
-        self.uid = self._call(
-            "authenticate", "common",
-            [self.db, self.user, self.api_key, {}],
-        )
+        try:
+            self.uid = self._call(
+                "authenticate", "common",
+                [self.db, self.user, self.api_key, {}],
+            )
+        except RuntimeError as e:
+            # Bug de website_sale_wishlist: reintentar soluciona la sesion rota.
+            if "session" in str(e).lower() or "Request" in str(e):
+                time.sleep(2)
+                self.uid = self._call(
+                    "authenticate", "common",
+                    [self.db, self.user, self.api_key, {}],
+                )
+            else:
+                raise
         if not self.uid:
             raise ConnectionError(
                 "Autenticacion fallida en Odoo. Revisa url, db, usuario y api key."
@@ -173,8 +184,11 @@ class OdooClient:
         return [x[0] if isinstance(x, (list, tuple)) else x for x in ids]
 
     def get_stage_moves_in_range(self, since, until):
-        """Movimientos de etapa en el rango. Devuelve (mensajes, {tracking_id: etapa_destino}).
+        """Movimientos de etapa en el rango.
 
+        Devuelve (mensajes, {tracking_id: etapa_destino}, {partner_id: nombre}).
+        El autor del mensaje (mail.message.author_id) es un res.partner, NO el
+        res.users del ejecutivo; por eso tambien se resuelven los nombres.
         Solo lecturas: mail.message (stage changed) + mail.tracking.value.
         """
         since_str = since.strftime("%Y-%m-%d 00:00:00")
@@ -196,7 +210,18 @@ class OdooClient:
                 for r in rows:
                     if r.get("mail_message_id"):
                         tracking[r["mail_message_id"][0]] = r.get("new_value_char") or ""
-        return msgs, tracking
+        # Nombres de los autores (res.partner) para atribuir por nombre.
+        authors = {}
+        partner_ids = sorted({
+            m.get("author_id")[0] for m in msgs if m.get("author_id")
+        })
+        if partner_ids:
+            for i in range(0, len(partner_ids), 300):
+                batch = partner_ids[i:i + 300]
+                rows = self.read("res.partner", batch, ["name"])
+                for r in rows:
+                    authors[r["id"]] = r.get("name") or ""
+        return msgs, tracking, authors
 
     def get_executives(self):
         rows = self.search_read(
@@ -279,11 +304,13 @@ class OdooClient:
         return out
 
     @staticmethod
-    def moves_by_day(msgs, tracking, stage_mapping, funnel_stages, tz):
+    def moves_by_day(msgs, tracking, stage_mapping, funnel_stages, tz, authors=None):
         """Flujo de etapa por dia.
 
         stage_mapping: {embudo: [nombres_crm]}. tracking: {msg_id: etapa_destino_crm}.
-        Devuelve {dia: {ejecutivo_id: {nombre_embudo: n}}}.
+        authors: {partner_id: nombre} del autor (res.partner). El resultado se
+        agrupa por NOMBRE NORMALIZADO del autor, porque author_id no es el uid.
+        Devuelve {dia: {nombre_autor: {nombre_embudo: n}}}.
         """
         if not stage_mapping:
             stage_mapping = {s: [s] for s in funnel_stages}
@@ -297,12 +324,15 @@ class OdooClient:
         out = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
         for m in msgs:
             dt = datetime.fromisoformat(m["create_date"]).astimezone(tz).date()
-            author = m.get("author_id")[0] if m.get("author_id") else 0
+            author_id = m.get("author_id")[0] if m.get("author_id") else 0
+            autor = _norm((authors or {}).get(author_id, ""))
+            if not autor:
+                continue
             nuevo = tracking.get(m.get("id"))
             if not nuevo:
                 continue
             funnel_name = destinos.get(_norm(nuevo))
             if not funnel_name:
                 continue
-            out[dt][author or 0][funnel_name] += 1
+            out[dt][autor][funnel_name] += 1
         return out
