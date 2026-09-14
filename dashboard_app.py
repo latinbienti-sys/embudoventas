@@ -111,6 +111,50 @@ def build_funnel(day: date):
     return header, rows, totals
 
 
+def build_gestion(day: date):
+    """Gestion diaria: meta vs logrado (flujo de HOY) vs pendiente por ejecutivo."""
+    execs = _active_execs()
+    stages = cfg.get("funnel_stages", [])
+    meta = cfg.get("daily_meta", {}) or {st: 0 for st in stages}
+    daily = {r["uid"]: r for r in build_daily_panel(day)[0]}
+    moves_hoy = {}
+    for r in store.get_stage_moves_range(cfg["sqlite_path"], day, day):
+        moves_hoy.setdefault(r["odoo_uid"], {})[r["stage"]] = r["count"]
+
+    rows = []
+    totals = {st: {"meta": 0, "logrado": 0, "pendiente": 0} for st in stages}
+    for e in execs:
+        dr = daily.get(e["odoo_uid"])
+        logrado = {}
+        for st in stages:
+            if st == "Contacto Tienda":
+                v = dr["tienda"] if dr else 0
+            elif st == "Seguimiento whatsapp Corporativo":
+                v = dr["actividades"] if dr else 0
+            else:
+                v = (moves_hoy.get(e["odoo_uid"], {}) or {}).get(st, 0)
+            logrado[st] = v or 0
+        m = {st: int(meta.get(st, 0)) for st in stages}
+        pend = {st: max(0, m[st] - logrado[st]) for st in stages}
+        ok = {st: logrado[st] >= m[st] for st in stages}
+        rows.append({"nombre": e["name"], "uid": e["odoo_uid"], "meta": m,
+                     "logrado": logrado, "pendiente": pend, "ok": ok})
+        for st in stages:
+            totals[st]["meta"] += m[st]
+            totals[st]["logrado"] += logrado[st]
+            totals[st]["pendiente"] += pend[st]
+
+    ventas_uid, venta_mes = store.get_ventas_month(cfg["sqlite_path"], day.year, day.month)
+    meta_venta = cfg.get("sales_meta", 0) or 0
+    return {
+        "stages": stages,
+        "rows": rows,
+        "totals": totals,
+        "ventas": {"meta": meta_venta, "logrado": venta_mes,
+                   "pendiente": max(0, meta_venta - venta_mes)},
+    }
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -127,6 +171,7 @@ def api_data():
             day = date.today()
     daily, daily_total = build_daily_panel(day)
     header, funnel_rows, funnel_total = build_funnel(day)
+    gestion = build_gestion(day)
     if not store.last_snapshot_date(cfg["sqlite_path"]):
         funnel_rows = []
     last_sync = store.last_sync_ok(cfg["sqlite_path"])
@@ -137,6 +182,7 @@ def api_data():
         "funnel_header": header,
         "funnel_rows": funnel_rows,
         "funnel_total": funnel_total,
+        "gestion": gestion,
         "last_sync": last_sync,
     })
 
@@ -154,10 +200,27 @@ def api_store_contact():
 @app.route("/api/pdf", methods=["GET"])
 def api_pdf():
     month = request.args.get("month", date.today().strftime("%Y-%m"))
+    executive = request.args.get("executive")
     tyear, tmonth = month.split("-")
-    path = monthly_pdf.generate_monthly_pdf(cfg, int(tyear), int(tmonth))
+    path = monthly_pdf.generate_monthly_pdf(cfg, int(tyear), int(tmonth), executive)
     return send_file(path, as_attachment=True,
                      download_name=Path(path).name, mimetype="application/pdf")
+
+
+@app.route("/api/pdfs", methods=["GET"])
+def api_pdfs():
+    month = request.args.get("month", "")
+    carpeta = Path(cfg.get("pdf_output_dir", "pdf_reports"))
+    pdfs = []
+    if carpeta.exists():
+        for p in sorted(carpeta.glob("*.pdf")):
+            if month and f"-{month}.pdf" not in p.name:
+                continue
+            pdfs.append({
+                "archivo": p.name,
+                "descarga": f"/api/pdf?month={month}" if month else "",
+            })
+    return jsonify({"pdfs": pdfs, "mes": month})
 
 
 if __name__ == "__main__":

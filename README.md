@@ -31,9 +31,16 @@ __PDF mensual visual (matplotlib)__
   equipo registra en Odoo sobre el prospecto TRAFICO (por dia y por ejecutivo).
   El boton +/- del tablero local queda como ajuste manual opcional por si faltó
   registrar la actividad. No ensucia el embudo real de Odoo.
-- **Ejecutivos activos**: solo se muestran los 9 ejecutivos de ventas
-  configurados (whitelist `executives_active`); se excluyen usuarios de
-  sistema/pools (`executives_exclude`).
+- **Ejecutivos activos**: solo se muestran los ejecutivos de ventas configurados
+  (whitelist `executives_active`); se excluyen usuarios de sistema/pools
+  (`executives_exclude`).
+- **Gestión diaria**: cada ejecutivo ve su meta por etapa (config `daily_meta`),
+  lo logrado HOY (flujo de hoy) y lo pendiente por cubrir; más la **meta de
+  venta mensual** (`sales_meta`, eq. RODEO 120,000) vs el monto de leads en
+  Cierre y lo pendiente.
+- **PDF mensual por ejecutivo**: `pdf_mensual.bat` genera GLOBAL + un PDF por
+  cada ejecutivo activo; quedan visibles y descargables en la web
+  (GitHub Pages) y en el tablero local.
 
 ## Seguridad
 

@@ -84,6 +84,13 @@ def init_db(path):
                 PRIMARY KEY (day, odoo_uid)
             );
 
+            CREATE TABLE IF NOT EXISTS ventas_daily (
+                day         TEXT NOT NULL,
+                odoo_uid    INTEGER NOT NULL,
+                amount      REAL NOT NULL DEFAULT 0,
+                PRIMARY KEY (day, odoo_uid)
+            );
+
             CREATE TABLE IF NOT EXISTS sync_log (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 run_at      TEXT NOT NULL,
@@ -189,6 +196,19 @@ def upsert_puerta_daily(path, by_day, tz):
                 c.execute(
                     "INSERT OR REPLACE INTO puerta_daily (day, odoo_uid, count) VALUES (?,?,?)",
                     (day.isoformat(), int(uid or 0), int(cnt)),
+                )
+        c.commit()
+
+
+def upsert_ventas_daily(path, by_day_amounts, tz):
+    """by_day_amounts: {dia: {uid: monto}} ventas del mes (leads en Cierre)."""
+    with closing(get_conn(path)) as c:
+        for day, amounts in by_day_amounts.items():
+            c.execute("DELETE FROM ventas_daily WHERE day=?", (day.isoformat(),))
+            for uid, monto in amounts.items():
+                c.execute(
+                    "INSERT OR REPLACE INTO ventas_daily (day, odoo_uid, amount) VALUES (?,?,?)",
+                    (day.isoformat(), int(uid or 0), float(monto)),
                 )
         c.commit()
 
@@ -309,6 +329,26 @@ def get_puerta_daily_range(path, start, end):
     with closing(get_conn(path)) as c:
         return [dict(r) for r in c.execute(
             "SELECT day, odoo_uid, count FROM puerta_daily WHERE day BETWEEN ? AND ?",
+            (start.isoformat(), end.isoformat()),
+        )]
+
+
+def get_ventas_month(path, year, month):
+    """Ventas del mes (monto de leads en Cierre): {uid: monto} y total."""
+    with closing(get_conn(path)) as c:
+        rows = [dict(r) for r in c.execute(
+            "SELECT odoo_uid, SUM(amount) AS amount FROM ventas_daily "
+            "WHERE day BETWEEN ? AND ? GROUP BY odoo_uid",
+            (f"{year}-{month:02d}-01", f"{year}-{month:02d}-31"),
+        )]
+        por_uid = {r["odoo_uid"]: r["amount"] for r in rows}
+        return por_uid, sum(por_uid.values())
+
+
+def get_ventas_daily_range(path, start, end):
+    with closing(get_conn(path)) as c:
+        return [dict(r) for r in c.execute(
+            "SELECT day, odoo_uid, amount FROM ventas_daily WHERE day BETWEEN ? AND ?",
             (start.isoformat(), end.isoformat()),
         )]
 

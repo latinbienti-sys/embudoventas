@@ -81,6 +81,24 @@
       </div>
     </section>
   </div>
+
+  <section class="tarjeta">
+    <h2>Gesti&oacute;n diaria (meta vs logrado hoy vs pendiente)</h2>
+    <p class="nota" id="gestion-venta"></p>
+    <div style="overflow-x:auto">
+      <table>
+        <thead id="thead-gestion"></thead>
+        <tbody id="tbody-gestion"></tbody>
+        <tfoot id="tfoot-gestion"></tfoot>
+      </table>
+    </div>
+  </section>
+
+  <section class="tarjeta">
+    <h2>Informes PDF del mes</h2>
+    <p class="nota">Por ejecutivo y global. Genera el mes en el tablero (<i>pdf_mensual.bat</i>) y se publican en la web autom&aacute;ticamente.</p>
+    <div id="lista-pdf"></div>
+  </section>
 </main>
 
 <script>
@@ -134,6 +152,44 @@ async function carga(day) {
   }
 
   document.getElementById("aviso-embudo").hidden = d.funnel_rows.length > 0;
+
+  // gestion diaria
+  const g = d.gestion || {};
+  const thg = document.getElementById("thead-gestion");
+  const metas = {};
+  (g.stages || []).forEach(s => { metas[s] = (g.totals[s] || {}).meta || 0; });
+  thg.innerHTML = "<tr><th>Ejecutivo</th>" +
+    (g.stages || []).map(s => `<th>${s}</th>`).join("") + "</tr>" +
+    "<tr class='total'><th>Meta diaria</th>" +
+    (g.stages || []).map(s => `<th class="num">${metas[s]}</th>`).join("") + "</tr>";
+  const tbg = document.getElementById("tbody-gestion");
+  tbg.innerHTML = (g.rows || []).map(x => {
+    const cels = (g.stages || []).map(s => {
+      const lo = x.logrado[s] || 0, pe = x.pendiente[s] || 0, ok = x.ok[s];
+      return `<td class="num"><b style="color:${ok ? "#1e8e5a" : "#0f3b6e"}">${lo}</b>` +
+             `<div class="sub" style="font-size:11px">pend ${pe}</div></td>`;
+    }).join("");
+    return `<tr><td>${x.nombre}</td>${cels}</tr>`;
+  }).join("");
+  const tfg = document.getElementById("tfoot-gestion");
+  if ((g.rows || []).length) {
+    tfg.innerHTML = "<tr class='total'><td>Total logrado hoy</td>" +
+      (g.stages || []).map(s => `<td class="num">${(g.totals[s]||{}).logrado || 0}</td>`).join("") + "</tr>";
+  }
+  const v = g.ventas || {};
+  document.getElementById("gestion-venta").innerHTML =
+    `Venta del mes (Cierre): <b>US$${Number(v.logrado||0).toLocaleString("en-US")}</b> ` +
+    `&middot; Meta: US$${Number(v.meta||0).toLocaleString("en-US")} ` +
+    `&middot; Pendiente: US$${Number(v.pendiente||0).toLocaleString("en-US")}`;
+
+  // PDFs del mes
+  const mes = document.getElementById("mes").value;
+  fetch("/api/pdfs?month=" + mes).then(r => r.json()).then(j => {
+    const l = document.getElementById("lista-pdf");
+    const nom = j.pdfs && j.pdfs.map(p =>
+      `<a class="b" href="/api/pdf?month=${j.mes}" target="_blank">&#128196; ${j.mes}</a>`);
+    l.innerHTML = nom ? nom.join(" ") : `<span class="nota">Aun no hay PDFs para ${j.mes}. Usa pdf_mensual.bat.</span>`;
+  }).catch(() => {});
 }
 
 async function btnTienda(uid, delta, day) {

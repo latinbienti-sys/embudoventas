@@ -24,6 +24,15 @@
   },
   "executives": [],
   "store_contact_activity": "Atención Puerta",
+  "daily_meta": {
+    "Contacto Tienda": 5,
+    "Seguimiento whatsapp Corporativo": 10,
+    "Asignados LC": 0,
+    "Apertura LC": 0,
+    "Oportunidad": 1,
+    "Cierre": 0
+  },
+  "sales_meta": 120000,
   "executives_active": [],
   "executives_exclude": [
     "ADMIN EQUIPO",

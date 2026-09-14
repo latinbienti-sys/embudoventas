@@ -41,14 +41,9 @@ def _barra(ax, valores, etiquetas, titulo, color="#0f3b6e", total=None):
     ax.grid(axis="y", alpha=0.25)
 
 
-def generate_monthly_pdf(cfg, year, month, executive=None, out_path=None):
-    db = cfg["sqlite_path"]
-    stages = cfg.get("funnel_stages", [])
-    month_start = date(year, month, 1)
-    last_day = calendar.monthrange(year, month)[1]
-    month_end = date(year, month, last_day)
-
-    execs = store.get_executives(db)
+def _active_exec_list(cfg):
+    """Ejecutivos activos (whitelist executives_active, sin executives_exclude)."""
+    execs = store.get_executives(cfg["sqlite_path"])
     exclude = {store.normalize(e) for e in cfg.get("executives_exclude", [])}
     execs = [e for e in execs if store.normalize(e["name"]) not in exclude]
     active = [store.normalize(e) for e in cfg.get("executives_active", [])]
@@ -56,6 +51,17 @@ def generate_monthly_pdf(cfg, year, month, executive=None, out_path=None):
         execs = [e for e in execs
                  if any(t in store.normalize(e["name"]) or store.normalize(e["name"]) in t
                         for t in active)]
+    return execs
+
+
+def generate_monthly_pdf(cfg, year, month, executive=None, out_path=None):
+    db = cfg["sqlite_path"]
+    stages = cfg.get("funnel_stages", [])
+    month_start = date(year, month, 1)
+    last_day = calendar.monthrange(year, month)[1]
+    month_end = date(year, month, last_day)
+
+    execs = _active_exec_list(cfg)
     if executive:
         execs = [e for e in execs if executive.lower() in e["name"].lower()]
     if not execs:
@@ -112,6 +118,10 @@ def generate_monthly_pdf(cfg, year, month, executive=None, out_path=None):
             matriz.append(fila)
         totales = ["TOTAL"] + [sum(f[i] for f in matriz) for i in range(1, len(stages) + 1)]
 
+        ventas_uid, venta_mes = store.get_ventas_month(db, year, month)
+        sales_meta = cfg.get("sales_meta", 0) or 0
+        pend_venta = max(0, sales_meta - venta_mes)
+
         ax = axs[0]
         ax.axis("off")
         tbl = ax.table(cellText=matriz + [totales], colLabels=cabecera, loc="center", cellLoc="center")
@@ -129,7 +139,12 @@ def generate_monthly_pdf(cfg, year, month, executive=None, out_path=None):
         ax = axs[1]
         vals = [sum(f[i] for f in matriz) for i in range(1, len(stages) + 1)]
         _barra(ax, vals, stages, "Volumen total por etapa", color="#e07b2a")
-        plt.tight_layout()
+        fig.text(0.01, 0.005,
+                 f"Venta del mes (Cierre): US${venta_mes:,.0f}  |  "
+                 f"Meta: US${sales_meta:,.0f}  |  "
+                 f"Pendiente por cubrir: US${pend_venta:,.0f}",
+                 fontsize=9, color="#0f3b6e")
+        plt.tight_layout(rect=[0, 0.02, 1, 1])
         pdf.savefig(fig)
         plt.close(fig)
 
@@ -165,7 +180,15 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--month", required=True, help="AAA-MM ejemplo 2026-08")
     ap.add_argument("--executive", default=None, help="nombre del ejecutivo (opcional)")
+    ap.add_argument("--all", action="store_true",
+                    help="genera GLOBAL + un PDF por cada ejecutivo activo")
     args = ap.parse_args()
     cfg = load_config()
     y, m = (int(x) for x in args.month.split("-"))
-    generate_monthly_pdf(cfg, y, m, args.executive)
+    if args.all:
+        generados = [generate_monthly_pdf(cfg, y, m)]
+        for e in _active_exec_list(cfg):
+            generados.append(generate_monthly_pdf(cfg, y, m, e["name"]))
+        print(f"PDFs generados: {len(generados)}")
+    else:
+        generate_monthly_pdf(cfg, y, m, args.executive)

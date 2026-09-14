@@ -9,6 +9,7 @@ Uso:
 import argparse
 import json
 import sys
+from collections import defaultdict
 from datetime import date, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -77,6 +78,11 @@ def main():
     since = until - timedelta(days=args.backfill) if args.backfill else until
     print(f"Procesando del {since} al {until}")
 
+    # ---------- Ventas del mes: monto de leads movidos a Cierre ----------
+    cierre_norm = {store.normalize(c) for c in (stage_mapping.get("Cierre") or [])}
+    seen_leads = set()      # evita contar dos veces un lead que pasó a Cierre
+    amount_cache = {}       # lead_id -> monto
+
     # ---------- Snapshot del embudo (estado actual por dia procesado) ----------
     # El snapshot refleja el pipeline tal como estaba en la fecha del rango.
     # Para backfill completo se produce un solo snapshot por dia reprocesando leads.
@@ -121,16 +127,38 @@ def main():
                     s: by_day_m_uid.get(day, {}).get(uid, {}).get(s, 0) + cnt
                     for s, cnt in stages.items()
                 }
+
+        # ---------- Ventas del dia: movimientos a Cierre con su monto ----------
+        ventas_uid = defaultdict(float)
+        for m in moves:
+            nuevo = tracking.get(m.get("id"))
+            if not nuevo or store.normalize(nuevo) not in cierre_norm:
+                continue
+            res = m.get("res_id")
+            if not res or res in seen_leads:
+                continue
+            seen_leads.add(res)
+            author = (authors or {}).get(m.get("author_id")[0], "") if m.get("author_id") else ""
+            uid = name2uid.get(store.normalize(author))
+            if not uid:
+                continue
+            if res not in amount_cache:
+                rows_a = client.read("crm.lead", [res], ["sale_amount_total"])
+                amount_cache[res] = (rows_a[0].get("sale_amount_total") or 0) if rows_a else 0
+            ventas_uid[uid] += amount_cache[res]
+
         store.upsert_created_daily(cfg["sqlite_path"], by_day_c, tz)
         store.upsert_touched_daily(cfg["sqlite_path"], by_day_t, tz)
         store.upsert_activities_daily(cfg["sqlite_path"], by_day_a, tz)
         store.upsert_puerta_daily(cfg["sqlite_path"], by_day_p, tz)
         store.upsert_stage_moves(cfg["sqlite_path"], by_day_m_uid, tz)
+        store.upsert_ventas_daily(cfg["sqlite_path"], {day: dict(ventas_uid)}, tz)
         total_a = sum(v for u in by_day_a.values() for v in u.values())
         total_c = sum(v for u in by_day_c.values() for v in u.values())
         total_t = sum(v for u in by_day_t.values() for v in u.values())
         total_m = sum(c for u in by_day_m_uid.values() for s in u.values() for c in s.values())
-        print(f"  {day}: funnel ok | creados {total_c} | atendidos {total_t} | actividades {total_a} | movimientos {total_m}")
+        total_v = sum(ventas_uid.values())
+        print(f"  {day}: funnel ok | creados {total_c} | atendidos {total_t} | actividades {total_a} | movimientos {total_m} | ventas ${total_v:,.0f}")
 
     store.log_sync(cfg["sqlite_path"], True, f"sincronizado {since} -> {until}")
     print("Listo. Datos guardados en", cfg["sqlite_path"])

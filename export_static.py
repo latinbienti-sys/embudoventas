@@ -62,6 +62,7 @@ def main():
 
     daily, daily_total = dashboard_app.build_daily_panel(dia)
     header, funnel, funnel_total = dashboard_app.build_funnel(dia)
+    gestion = dashboard_app.build_gestion(dia)
     last_sync = store.last_sync_ok(dashboard_app.cfg["sqlite_path"])
     ahora = datetime.now().strftime("%Y-%m-%d %H:%M")
 
@@ -104,6 +105,24 @@ def main():
         f"<td class='num'>{funnel_total[s] or 0}</td>" for s in header[1:]) + "</tr>"
 
     encabezado_embudo = "<tr>" + "".join(f"<th>{esc(h)}</th>" for h in header) + "</tr>"
+
+    # ---- gestion diaria ----
+    gs = gestion["stages"]
+    mg = {s: (gestion["totals"][s]["meta"] if gestion["totals"].get(s) else 0) for s in gs}
+    filas_gestion = ""
+    for r in gestion["rows"]:
+        celdas = ""
+        for s in gs:
+            lo = r["logrado"].get(s, 0)
+            pe = r["pendiente"].get(s, 0)
+            color = "#1e8e5a" if r["ok"].get(s) else "#0f3b6e"
+            celdas += (f"<td class='num' style='border-bottom:1px solid var(--gris)'><b style='color:{color}'>{lo}</b>"
+                       f"<div class='nota' style='font-size:10px'>pend {pe}</div></td>")
+        filas_gestion += f"<tr><td>{esc(r['nombre'])}</td>{celdas}</tr>"
+    tot_log = "".join(f"<td class='num'>{gestion['totals'][s]['logrado']}</td>" for s in gs)
+    v = gestion["ventas"]
+    venta_txt = (f"Venta del mes (Cierre): <b>US${v['logrado']:,.0f}</b> &middot; "
+                 f"Meta: US${v['meta']:,.0f} &middot; Pendiente: US${v['pendiente']:,.0f}")
 
     # ---- enlaces PDF ----
     pdf_html = "".join(
@@ -154,7 +173,20 @@ def main():
   </section>
 
   <section class="tarjeta">
+    <h2>Gesti&oacute;n diaria (meta vs logrado hoy vs pendiente) &#8212; {esc(dia_txt)}</h2>
+    <p class="nota">{venta_txt}</p>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Ejecutivo</th>{''.join(f'<th>{esc(s)}</th>' for s in gs)}</tr>
+          <tr class='total'><th>Meta diaria</th>{''.join(f'<th class="num">{mg[s]}</th>' for s in gs)}</tr></thead>
+        <tbody>{filas_gestion}<tr class='total'><td>Total logrado hoy</td>{tot_log}</tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="tarjeta">
     <h2>Informes PDF del mes</h2>
+    <p class="nota">Gen&eacute;ralos con pdf_mensual.bat (crea GLOBAL + uno por ejecutivo) y quedan visibles y descargables aqui.</p>
     {pdf_html}
     <p class="nota" style="margin-top:10px">El tablero interactivo con botones +/− (Contacto Tienda) se abre localmente con dashboard.bat en http://127.0.0.1:8080.</p>
   </section>

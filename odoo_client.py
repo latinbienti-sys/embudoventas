@@ -79,26 +79,27 @@ class OdooClient:
         raise RuntimeError(f"No se pudo contactar Odoo tras {self.retries} intentos: {last_err}")
 
     def connect(self):
-        try:
-            self.uid = self._call(
-                "authenticate", "common",
-                [self.db, self.user, self.api_key, {}],
-            )
-        except RuntimeError as e:
-            # Bug de website_sale_wishlist: reintentar soluciona la sesion rota.
-            if "session" in str(e).lower() or "Request" in str(e):
-                time.sleep(2)
+        last = None
+        for _ in range(3):
+            try:
                 self.uid = self._call(
                     "authenticate", "common",
                     [self.db, self.user, self.api_key, {}],
                 )
-            else:
+                if self.uid:
+                    return self
+            except RuntimeError as e:
+                # Bug de website_sale_wishlist: la sesion rota se resuelve
+                # reintentando la autenticacion (sigue siendo SOLO LECTURA).
+                if "session" in str(e).lower() or "Request" in str(e):
+                    last = e
+                    time.sleep(3)
+                    continue
                 raise
-        if not self.uid:
-            raise ConnectionError(
-                "Autenticacion fallida en Odoo. Revisa url, db, usuario y api key."
-            )
-        return self
+        raise ConnectionError(
+            "Autenticacion fallida en Odoo. Revisa url, db, usuario y api key. "
+            + (f" ({last})" if last else "")
+        )
 
     # ------------------------------------------------------------------ #
     def execute_kw(self, model, method, args=None, kwargs=None):
@@ -212,7 +213,7 @@ class OdooClient:
         if until:
             domain.append(("create_date", "<", until.strftime("%Y-%m-%d 00:00:00")))
         msgs = self.search_read("mail.message", domain,
-                                ["tracking_value_ids", "author_id", "create_date"])
+                                ["tracking_value_ids", "author_id", "create_date", "res_id"])
         tv_ids = {tv for m in msgs for tv in self._tid(m.get("tracking_value_ids"))}
         tracking = {}
         if tv_ids:
