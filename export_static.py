@@ -43,6 +43,14 @@ a.pdf { display:inline-block; margin:0 6px 8px 0; padding:6px 12px; border:1px s
 .nota { font-size: 12px; color: #56657a; }
 .aviso { color:#8a1d1d; font-weight:600; }
 .foot { color:#8a939c; font-size:12px; margin-top:10px; text-align:center; }
+.pestanas { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+.pestanas button { border:1px solid var(--borde); background:#fff; border-radius:6px; padding:7px 13px; font-size:13px; cursor:pointer; color:#3a4a5c; }
+.pestanas button.activa { background:var(--azul); color:#fff; border-color:var(--azul); font-weight:600; }
+.graf-dia { display:flex; align-items:flex-end; gap:2px; height:120px; margin-top:8px; }
+.graf-dia .col { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; min-width:0; }
+.graf-dia .col i { display:block; width:100%; background:var(--naranja); border-radius:3px 3px 0 0; position:relative; }
+.graf-dia .col span { font-size:10px; color:#56657a; }
+.graf-dia .col b { font-size:10px; }
 """
 
 
@@ -133,6 +141,57 @@ def main():
     dia_txt = f"dia {dia.strftime('%d/%m/%Y')}"
     mes_txt = f"{MESES[month_start.month]} {month_start.year}"
 
+    # ---- vista por ejecutivo (info como el PDF, en pestanas) ----
+    vista = dashboard_app.build_vista(dia)
+    v_items = [vista["global"]] + vista["rows"]
+    maxf = max([1] + [v for row in v_items for v in row["funnel"].values()])
+    maxd = max([1] + [v for row in v_items for v in row["serie"]])
+
+    vista_pest = "".join(
+        f"<button data-i='{i}' class='{('activa' if not i else '')}'>{esc(row['nombre'])}</button>"
+        for i, row in enumerate(v_items)
+    )
+    th_hdr = ['<th class="num">' + esc(s) + "</th>" for s in vista["stages"]]
+    vista_pan = []
+    for i, x in enumerate(v_items):
+        celdas = ""
+        for st in vista["stages"]:
+            v = x["funnel"].get(st, 0) or 0
+            an = round(v / maxf * 100) if v else 0
+            celdas += (f"<td class='num'><div class='bar-fondo'>"
+                       f"<i style='width:{an}%'>&nbsp;{v}</i></div></td>")
+        cols = "".join(
+            f"<div class='col'><b>{v}</b><i style='height:{max(3, round(v / maxd * 95))}px'></i>"
+            f"<span>{di + 1}</span></div>"
+            for di, v in enumerate(x["serie"])
+        )
+        meta_v = vista["sales_meta"] or 0
+        pend_v = max(0, meta_v - x["venta_mes"])
+        vista_pan.append(
+            f"<div class='vista-panel' data-i='{i}' {'hidden' if i else ''}>"
+            f"<p class='nota'><b>Informe del mes {esc(vista['mes'])}</b> &mdash; {esc(x['nombre'])}</p>"
+            f"<div style='overflow-x:auto'><table>"
+            f"<thead><tr><th>Flujo (embudo del mes)</th>{''.join(th_hdr)}</tr></thead>"
+            f"<tbody><tr><td>{esc(x['nombre'])}</td>{celdas}</tr></tbody></table></div>"
+            f"<p class='nota'>Venta mensual: <b>US${x['venta_mes']:,.0f}</b> &middot; "
+            f"Meta: US${meta_v:,.0f} &middot; Pendiente: US${pend_v:,.0f}</p>"
+            f"<p class='nota'>Atenci&oacute;n diaria del mes (creados + atendidos + contacto tienda)</p>"
+            f"<div class='graf-dia'>{cols}</div></div>"
+        )
+    vista_html = (
+        f"<div class='pestanas'>{vista_pest}</div>"
+        f"<div class='panel-vista'>{''.join(vista_pan)}</div>"
+        "<script>"
+        "(function(){var p=document.querySelector('.panel-vista');"
+        "var bts=document.querySelectorAll('.pestanas button');"
+        "bts.forEach(function(b){b.onclick=function(){"
+        "bts.forEach(function(z){z.classList.remove('activa');});"
+        "b.classList.add('activa');"
+        "Array.prototype.forEach.call(p.children,function(pl){"
+        "pl.hidden = String(pl.getAttribute('data-i')) !== b.getAttribute('data-i');});};});})();"
+        "</script>"
+    )
+
     html = f"""<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -182,6 +241,12 @@ def main():
         <tbody>{filas_gestion}<tr class='total'><td>Total logrado hoy</td>{tot_log}</tr></tbody>
       </table>
     </div>
+  </section>
+
+  <section class="tarjeta">
+    <h2>Vista por ejecutivo (como el PDF del mes)</h2>
+    <p class="nota">La info del informe PDF de cada ejecutivo, directamente en pesta&ntilde;as.</p>
+    {vista_html}
   </section>
 
   <section class="tarjeta">

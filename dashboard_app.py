@@ -155,6 +155,78 @@ def build_gestion(day: date):
     }
 
 
+def build_vista(day: date):
+    """Vista por ejecutivo (como el PDF del mes): embudo + diario + venta."""
+    execs = _active_execs()
+    stages = cfg.get("funnel_stages", [])
+    month_start = day.replace(day=1)
+    month_end = month_start.replace(day=28) + timedelta(days=4)
+    month_end = month_end - timedelta(days=month_end.day)
+
+    moves = {}
+    for r in store.get_stage_moves_month(cfg["sqlite_path"], day.year, day.month):
+        moves.setdefault(r["odoo_uid"], {})[r["stage"]] = r["count"]
+    tienda, act = {}, {}
+    for r in store.get_store_contacts_range(cfg["sqlite_path"], month_start, month_end) + \
+                store.get_puerta_daily_range(cfg["sqlite_path"], month_start, month_end):
+        tienda[r["odoo_uid"]] = tienda.get(r["odoo_uid"], 0) + r["count"]
+    for r in store.get_activities_daily_range(cfg["sqlite_path"], month_start, month_end):
+        act[r["odoo_uid"]] = act.get(r["odoo_uid"], 0) + r["count"]
+
+    ventas_uid, venta_total = store.get_ventas_month(cfg["sqlite_path"], day.year, day.month)
+
+    def _diario():
+        d = {}
+        for src in (store.get_created_daily_range(cfg["sqlite_path"], month_start, month_end),
+                    store.get_touched_daily_range(cfg["sqlite_path"], month_start, month_end),
+                    store.get_store_contacts_range(cfg["sqlite_path"], month_start, month_end),
+                    store.get_puerta_daily_range(cfg["sqlite_path"], month_start, month_end)):
+            for r in src:
+                k = (r["day"], r["odoo_uid"])
+                d[k] = d.get(k, 0) + r["count"]
+        return d
+
+    diario = _diario()
+    dias = [(month_start + timedelta(days=i)).isoformat() for i in range(month_end.day)]
+
+    def _serie(uid):
+        return [diario.get((dd, uid), 0) for dd in dias]
+
+    rows = []
+    for e in execs:
+        funnel = {}
+        for st in stages:
+            if st == "Contacto Tienda":
+                v = tienda.get(e["odoo_uid"], 0)
+            elif st == "Seguimiento whatsapp Corporativo":
+                v = act.get(e["odoo_uid"], 0)
+            else:
+                v = moves.get(e["odoo_uid"], {}).get(st, 0)
+            funnel[st] = v or 0
+        rows.append({
+            "uid": e["odoo_uid"], "nombre": e["name"], "funnel": funnel,
+            "venta_mes": ventas_uid.get(e["odoo_uid"], 0), "serie": _serie(e["odoo_uid"]),
+        })
+
+    global_funnel = {st: 0 for st in stages}
+    for r in rows:
+        for st in stages:
+            global_funnel[st] += r["funnel"][st]
+    serie_global = [[sum(_serie(e["odoo_uid"])[i] for e in execs) for i in range(month_end.day)]]
+    return {
+        "mes": f"{day.year}-{day.month:02d}",
+        "dias": dias,
+        "stages": stages,
+        "meta_diaria": cfg.get("daily_meta", {}) or {},
+        "sales_meta": cfg.get("sales_meta", 0) or 0,
+        "rows": rows,
+        "global": {
+            "nombre": "GLOBAL", "funnel": global_funnel,
+            "venta_mes": venta_total, "serie": serie_global[0],
+        },
+    }
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -172,6 +244,7 @@ def api_data():
     daily, daily_total = build_daily_panel(day)
     header, funnel_rows, funnel_total = build_funnel(day)
     gestion = build_gestion(day)
+    vista = build_vista(day)
     if not store.last_snapshot_date(cfg["sqlite_path"]):
         funnel_rows = []
     last_sync = store.last_sync_ok(cfg["sqlite_path"])
@@ -183,6 +256,7 @@ def api_data():
         "funnel_rows": funnel_rows,
         "funnel_total": funnel_total,
         "gestion": gestion,
+        "vista": vista,
         "last_sync": last_sync,
     })
 

@@ -35,6 +35,16 @@
   .aviso { color:#8a1d1d; font-weight:600; }
   .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+  .pestanas { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+  .pestanas button { border:1px solid var(--borde); background:#fff; border-radius:6px;
+                     padding:7px 13px; font-size:13px; cursor:pointer; color:#3a4a5c; }
+  .pestanas button.activa { background:var(--azul); color:#fff; border-color:var(--azul); font-weight:600; }
+  .graf-dia { display:flex; align-items:flex-end; gap:2px; height:120px; margin-top:8px; }
+  .graf-dia .col { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; min-width:0; }
+  .graf-dia .col i { display:block; width:100%; background:var(--naranja); border-radius:3px 3px 0 0; position:relative; }
+  .graf-dia .col span { font-size:10px; color:#56657a; }
+  .graf-dia .col b { font-size:10px; }
+  .m2 { margin-top:14px; }
 </style>
 </head>
 <body>
@@ -98,6 +108,12 @@
     <h2>Informes PDF del mes</h2>
     <p class="nota">Por ejecutivo y global. Genera el mes en el tablero (<i>pdf_mensual.bat</i>) y se publican en la web autom&aacute;ticamente.</p>
     <div id="lista-pdf"></div>
+  </section>
+
+  <section class="tarjeta">
+    <h2>Vista por ejecutivo (como el PDF del mes)</h2>
+    <div class="pestanas" id="pestanas"></div>
+    <div id="panel-vista"></div>
   </section>
 </main>
 
@@ -190,6 +206,62 @@ async function carga(day) {
       `<a class="b" href="/api/pdf?month=${j.mes}" target="_blank">&#128196; ${j.mes}</a>`);
     l.innerHTML = nom ? nom.join(" ") : `<span class="nota">Aun no hay PDFs para ${j.mes}. Usa pdf_mensual.bat.</span>`;
   }).catch(() => {});
+
+  // vista por ejecutivo (info como el PDF, en pestanas)
+  const V = d.vista;
+  if (V) renderVista(V);
+}
+
+let vistaActiva = "";
+
+function renderVista(V) {
+  const items = [V.global, ...V.rows];
+  const pest = document.getElementById("pestanas");
+  pest.innerHTML = items.map((x, i) =>
+    `<button data-i="${i}" class="${i === 0 ? "activa" : ""}">${x.nombre}</button>`).join("");
+  vistaActiva = "0";
+  const panel = document.getElementById("panel-vista");
+  panel.innerHTML = items.map((x, i) => vistaHTML(x, V, i)).join("");
+  pest.querySelectorAll("button").forEach(b => {
+    b.onclick = () => {
+      pest.querySelectorAll("button").forEach(bb => bb.classList.remove("activa"));
+      b.classList.add("activa");
+      vistaActiva = b.dataset.i;
+      panel.querySelectorAll(".vista-panel").forEach(p => p.hidden = p.dataset.i !== vistaActiva);
+    };
+  });
+}
+
+function vistaHTML(x, V, i) {
+  const stages = V.stages || [];
+  const maxF = Math.max(1, ...stages.map(s => x.funnel[s] || 0));
+  const celdaEmb = stages.map(s => {
+    const v = x.funnel[s] || 0;
+    const an = Math.round(v / maxF * 100);
+    return `<td class="num"><div class="bar-fondo"><i style="width:${an}%">&nbsp;${v}</i></div></td>`;
+  }).join("");
+  const maxD = Math.max(1, ...x.serie);
+  const cols = x.serie.map((v, di) => {
+    const h = Math.max(3, Math.round(v / maxD * 95));
+    return `<div class="col"><b>${v}</b><i style="height:${h}px"></i><span>${di + 1}</span></div>`;
+  }).join("");
+  const metaV = Number(V.sales_meta || 0);
+  const venta = Number(x.venta_mes || 0);
+  const pendV = Math.max(0, metaV - venta);
+  return `
+  <div class="vista-panel" data-i="${i}">
+    <p class="sub"><b>Informe del mes ${V.mes}</b> &mdash; ${x.nombre}</p>
+    <table>
+      <thead><tr><th>Flujo (embudo del mes)</th>${stages.map(s => `<th class="num">${s}</th>`).join("")}</tr></thead>
+      <tbody><tr><td>${x.nombre}</td>${celdaEmb}</tr></tbody>
+    </table>
+    <p class="sub m2">Venta mensual: <b>US$${venta.toLocaleString("en-US")}</b>
+       &middot; Meta: US$${metaV.toLocaleString("en-US")}
+       &middot; Pendiente: US$${pendV.toLocaleString("en-US")}</p>
+    <p class="sub">Atenci&oacute;n diaria del mes (creados + atendidos + contacto tienda)</p>
+    <div class="graf-dia">${cols}</div>
+  </div>`;
+}
 }
 
 async function btnTienda(uid, delta, day) {
