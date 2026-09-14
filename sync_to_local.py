@@ -65,6 +65,13 @@ def main():
     stage_mapping = cfg.get("stage_mapping", {}) or {s: [s] for s in stage_names}
     print("Etapas CRM:", len(stage_map), "| Etapas del embudo configuradas:", len(stage_names))
 
+    # ---------- Actividad 'Atención Puerta' (Contacto Tienda) ----------
+    puerta_type_id = None
+    puerta_name = cfg.get("store_contact_activity", "")
+    if puerta_name:
+        puerta_type_id = client.get_activity_type_id(puerta_name)
+        print(f"Contacto Tienda: actividad '{puerta_name}' -> type_id {puerta_type_id}")
+
     # ---------- Rango de dias a procesar ----------
     until = date.fromisoformat(args.until) if args.until else date.today()
     since = until - timedelta(days=args.backfill) if args.backfill else until
@@ -86,6 +93,11 @@ def main():
         )
         activities = client.get_activities_in_range(day, day + timedelta(days=1))
         moves, tracking, authors = client.get_stage_moves_in_range(day, day + timedelta(days=1))
+        if puerta_type_id:
+            puerta = client.get_store_contact_activities_in_range(
+                day, day + timedelta(days=1), puerta_type_id)
+        else:
+            puerta = []
 
         funnel, unmapped = OdooClient.funnel_from_leads(
             all_leads, stage_map, stage_names, stage_mapping, tz)
@@ -96,6 +108,7 @@ def main():
         by_day_c = OdooClient.created_by_day(created, tz)
         by_day_t = OdooClient.touched_by_day(touched, tz)
         by_day_a = OdooClient.activities_by_day(activities, tz)
+        by_day_p = OdooClient.puerta_by_day(puerta, tz)
         by_day_m = OdooClient.moves_by_day(moves, tracking, stage_mapping, stage_names, tz, authors)
         # Reagrupa movimientos por UID del ejecutivo (via nombre del autor).
         by_day_m_uid = {}
@@ -111,6 +124,7 @@ def main():
         store.upsert_created_daily(cfg["sqlite_path"], by_day_c, tz)
         store.upsert_touched_daily(cfg["sqlite_path"], by_day_t, tz)
         store.upsert_activities_daily(cfg["sqlite_path"], by_day_a, tz)
+        store.upsert_puerta_daily(cfg["sqlite_path"], by_day_p, tz)
         store.upsert_stage_moves(cfg["sqlite_path"], by_day_m_uid, tz)
         total_a = sum(v for u in by_day_a.values() for v in u.values())
         total_c = sum(v for u in by_day_c.values() for v in u.values())

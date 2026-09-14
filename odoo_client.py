@@ -172,6 +172,20 @@ class OdooClient:
             domain.append(("create_date", "<", until.strftime("%Y-%m-%d 00:00:00")))
         return self.search_read("mail.activity", domain, ["create_date", "user_id"])
 
+    def get_activity_type_id(self, name):
+        """Id del tipo de actividad por su nombre exacto (ej. 'Atención Puerta')."""
+        rows = self.search_read("mail.activity.type", [("name", "=", name)], ["id"])
+        return rows[0]["id"] if rows else None
+
+    def get_store_contact_activities_in_range(self, since, until, activity_type_id):
+        """Actividades 'Atencion Puerta' (Contacto Tienda) en el rango, solo lectura."""
+        since_str = since.strftime("%Y-%m-%d 00:00:00")
+        domain = [("activity_type_id", "=", activity_type_id),
+                  ("create_date", ">=", since_str)]
+        if until:
+            domain.append(("create_date", "<", until.strftime("%Y-%m-%d 00:00:00")))
+        return self.search_read("mail.activity", domain, ["create_date", "user_id"])
+
     # Subtipos de mensajes que registran movimiento de etapa en el CRM.
     _STAGE_CHANGED_SUBTYPES = [6, 11, 29, 44, 64]
 
@@ -293,6 +307,19 @@ class OdooClient:
 
     @staticmethod
     def activities_by_day(activities, tz):
+        out = defaultdict(lambda: defaultdict(int))
+        for a in activities:
+            create_date = a.get("create_date")
+            if not create_date:
+                continue
+            dt = datetime.fromisoformat(create_date).astimezone(tz).date()
+            user_id = a.get("user_id")[0] if a.get("user_id") else 0
+            out[dt][user_id] += 1
+        return out
+
+    @staticmethod
+    def puerta_by_day(activities, tz):
+        """Contacto Tienda: actividades 'Atencion Puerta' por dia y ejecutivo."""
         out = defaultdict(lambda: defaultdict(int))
         for a in activities:
             create_date = a.get("create_date")

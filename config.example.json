@@ -23,6 +23,7 @@
     "Cierre": ["Facturado", "Contado"]
   },
   "executives": [],
+  "store_contact_activity": "Atención Puerta",
   "executives_active": [],
   "executives_exclude": [
     "ADMIN EQUIPO",

@@ -49,8 +49,10 @@ def build_daily_panel(day: date):
                store.get_touched_daily_range(cfg["sqlite_path"], day, day)}
     created = {r["odoo_uid"]: r["count"] for r in
                store.get_created_daily_range(cfg["sqlite_path"], day, day)}
-    tienda = {r["odoo_uid"]: r["count"] for r in
-              store.get_store_contacts_range(cfg["sqlite_path"], day, day)}
+    boton = {r["odoo_uid"]: r["count"] for r in
+             store.get_store_contacts_range(cfg["sqlite_path"], day, day)}
+    puerta = {r["odoo_uid"]: r["count"] for r in
+              store.get_puerta_daily_range(cfg["sqlite_path"], day, day)}
     actividades = {r["odoo_uid"]: r["count"] for r in
                    store.get_activities_daily_range(cfg["sqlite_path"], day, day)}
 
@@ -59,7 +61,7 @@ def build_daily_panel(day: date):
     for e in execs:
         c = created.get(e["odoo_uid"], 0)
         t = touched.get(e["odoo_uid"], 0)
-        s = tienda.get(e["odoo_uid"], 0)
+        s = boton.get(e["odoo_uid"], 0) + puerta.get(e["odoo_uid"], 0)
         a = actividades.get(e["odoo_uid"], 0)
         total["creados"] += c
         total["atendidos"] += t
@@ -82,6 +84,8 @@ def build_funnel(day: date):
              store.get_stage_moves_month(cfg["sqlite_path"], day.year, day.month)}
     tienda = {}
     for r in store.get_store_contacts_range(cfg["sqlite_path"], month_start, month_end):
+        tienda[r["odoo_uid"]] = tienda.get(r["odoo_uid"], 0) + r["count"]
+    for r in store.get_puerta_daily_range(cfg["sqlite_path"], month_start, month_end):
         tienda[r["odoo_uid"]] = tienda.get(r["odoo_uid"], 0) + r["count"]
     actividades = {}
     for r in store.get_activities_daily_range(cfg["sqlite_path"], month_start, month_end):

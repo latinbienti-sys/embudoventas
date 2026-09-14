@@ -77,6 +77,13 @@ def init_db(path):
                 PRIMARY KEY (day, odoo_uid)
             );
 
+            CREATE TABLE IF NOT EXISTS puerta_daily (
+                day         TEXT NOT NULL,
+                odoo_uid    INTEGER NOT NULL,
+                count       INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (day, odoo_uid)
+            );
+
             CREATE TABLE IF NOT EXISTS sync_log (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 run_at      TEXT NOT NULL,
@@ -170,6 +177,19 @@ def upsert_stage_moves(path, by_day, tz):
                         "INSERT OR REPLACE INTO stage_moves (day, odoo_uid, stage, count) VALUES (?,?,?,?)",
                         (day.isoformat(), int(uid or 0), stage, int(cnt)),
                     )
+        c.commit()
+
+
+def upsert_puerta_daily(path, by_day, tz):
+    """by_day: {dia: {uid: n}} actividades 'Atencion Puerta' (Contacto Tienda)."""
+    with closing(get_conn(path)) as c:
+        for day, counts in by_day.items():
+            c.execute("DELETE FROM puerta_daily WHERE day=?", (day.isoformat(),))
+            for uid, cnt in counts.items():
+                c.execute(
+                    "INSERT OR REPLACE INTO puerta_daily (day, odoo_uid, count) VALUES (?,?,?)",
+                    (day.isoformat(), int(uid or 0), int(cnt)),
+                )
         c.commit()
 
 
@@ -281,6 +301,14 @@ def get_store_contacts_range(path, start, end):
     with closing(get_conn(path)) as c:
         return [dict(r) for r in c.execute(
             "SELECT day, odoo_uid, count FROM store_contacts WHERE day BETWEEN ? AND ?",
+            (start.isoformat(), end.isoformat()),
+        )]
+
+
+def get_puerta_daily_range(path, start, end):
+    with closing(get_conn(path)) as c:
+        return [dict(r) for r in c.execute(
+            "SELECT day, odoo_uid, count FROM puerta_daily WHERE day BETWEEN ? AND ?",
             (start.isoformat(), end.isoformat()),
         )]
 

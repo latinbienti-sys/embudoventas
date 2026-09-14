@@ -67,6 +67,9 @@ def generate_monthly_pdf(cfg, year, month, executive=None, out_path=None):
     tienda_sum = {}
     for r in tienda_rows:
         tienda_sum[r["odoo_uid"]] = tienda_sum.get(r["odoo_uid"], 0) + r["count"]
+    puerta_rows = store.get_puerta_daily_range(db, month_start, month_end)
+    for r in puerta_rows:
+        tienda_sum[r["odoo_uid"]] = tienda_sum.get(r["odoo_uid"], 0) + r["count"]
     act_rows = store.get_activities_daily_range(db, month_start, month_end)
     act_sum = {}
     for r in act_rows:
@@ -79,6 +82,8 @@ def generate_monthly_pdf(cfg, year, month, executive=None, out_path=None):
     created_by = {(r["day"], r["odoo_uid"]): r["count"] for r in created}
     touched_by = {(r["day"], r["odoo_uid"]): r["count"] for r in touched}
     tienda_by = {(r["day"], r["odoo_uid"]): r["count"] for r in tienda_rows}
+    for r in puerta_rows:
+        tienda_by[(r["day"], r["odoo_uid"])] = tienda_by.get((r["day"], r["odoo_uid"]), 0) + r["count"]
 
     db_path = cfg.get("pdf_output_dir", "pdf_reports")
     Path(db_path).mkdir(exist_ok=True)

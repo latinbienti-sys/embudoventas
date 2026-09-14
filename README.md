@@ -27,9 +27,10 @@ __PDF mensual visual (matplotlib)__
 - **Embudo = FLUJO DEL MES**: cuenta los *movimientos* de cada etapa por
   ejecutivo en el mes (quien entro a Cada etapa, oportunidades ganadas,
   facturados), no el stock acumulado.
-- **Contacto Tienda**: no existe en el CRM y no tiene nombre; se contabiliza con
-  un **boton en el tablero** que suma/resta por dia y ejecutivo en el cache
-  local. No ensucia el embudo real de Odoo.
+- **Contacto Tienda**: se mide con la actividad **"Atención Puerta"** que el
+  equipo registra en Odoo sobre el prospecto TRAFICO (por dia y por ejecutivo).
+  El boton +/- del tablero local queda como ajuste manual opcional por si faltó
+  registrar la actividad. No ensucia el embudo real de Odoo.
 - **Ejecutivos activos**: solo se muestran los 9 ejecutivos de ventas
   configurados (whitelist `executives_active`); se excluyen usuarios de
   sistema/pools (`executives_exclude`).
