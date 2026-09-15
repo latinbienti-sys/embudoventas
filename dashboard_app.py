@@ -196,6 +196,25 @@ def build_cierre(day: date):
     return {"rows": rows, "total": tot}
 
 
+def build_historico():
+    """Historico por dia: matriz dias x ejecutivo con gestion diaria (prospect,
+    atendidos, tienda, cierres, venta). Reusa build_cierre por dia (cache local)."""
+    execs = _active_execs()
+    dias = store.get_dias_disponibles(cfg["sqlite_path"])
+    exec_uid = [{"uid": e["odoo_uid"], "nombre": e["name"]} for e in execs]
+    rend = {}
+    totales = {}
+    for ds in dias:
+        d = date.fromisoformat(ds)
+        c = build_cierre(d)
+        por_uid = {r["uid"]: r for r in c["rows"]}
+        rend[ds] = {str(e["uid"]): por_uid.get(e["uid"], {
+            "nombre": e["nombre"], "prospect": 0, "atendidos": 0,
+            "tienda": 0, "cierres": 0, "venta": 0.0}) for e in exec_uid}
+        totales[ds] = c["total"]
+    return {"dias": dias, "ejecutivos": exec_uid, "rend": rend, "totales": totales}
+
+
 def build_vista(day: date):
     """Vista por ejecutivo (como el PDF del mes): embudo + diario + venta."""
     execs = _active_execs()
@@ -292,6 +311,7 @@ def api_data():
     gestion = build_gestion(day)
     vista = build_vista(day)
     cierre = build_cierre(day)
+    historico = build_historico()
     if not store.last_snapshot_date(cfg["sqlite_path"]):
         funnel_rows = []
     last_sync = store.last_sync_ok(cfg["sqlite_path"])
@@ -305,6 +325,7 @@ def api_data():
         "gestion": gestion,
         "vista": vista,
         "cierre": cierre,
+        "historico": historico,
         "last_sync": last_sync,
     })
 

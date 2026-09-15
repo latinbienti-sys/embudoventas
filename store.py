@@ -363,3 +363,15 @@ def last_sync_ok(path):
     with closing(get_conn(path)) as c:
         row = c.execute("SELECT run_at, ok FROM sync_log ORDER BY id DESC LIMIT 1").fetchone()
         return dict(row) if row else None
+
+
+def get_dias_disponibles(path):
+    """Dias con datos en el cache (union de las tablas diarias), ordenados."""
+    with closing(get_conn(path)) as c:
+        rows = c.execute(
+            "SELECT day FROM created_daily UNION SELECT day FROM touched_daily "
+            "UNION SELECT day FROM activities_daily UNION SELECT day FROM stage_moves "
+            "UNION SELECT day FROM puerta_daily UNION SELECT day FROM ventas_daily "
+            "ORDER BY day"
+        ).fetchall()
+        return [r["day"] for r in rows]

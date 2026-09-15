@@ -60,6 +60,8 @@
     <label>Fecha:
       <input type="date" id="dia">
     </label>
+    <button id="btn-ante" class="b">&larr; anterior</button>
+    <button id="btn-sig" class="b">siguiente &rarr;</button>
     <button id="btn-ver" class="btn">Ver d&iacute;a</button>
     <span style="flex:1"></span>
     <label>PDF mensual:
@@ -109,6 +111,17 @@
     <h2>Informes PDF del mes</h2>
     <p class="nota">Por ejecutivo y global. Genera el mes en el tablero (<i>pdf_mensual.bat</i>) y se publican en la web autom&aacute;ticamente.</p>
     <div id="lista-pdf"></div>
+  </section>
+
+  <section class="tarjeta">
+    <h2>Hist&oacute;rico por d&iacute;a (cliente atendidos, cierres y venta)</h2>
+    <p class="nota">Haz clic en un d&iacute;a para ver el detalle completo de ese d&iacute;a abajo. Celda = total gesti&oacute;n del d&iacute;a (prospect+atend+cierres); l&iacute;neas: cierres y venta.</p>
+    <div style="overflow-x:auto">
+      <table>
+        <thead id="thead-historico"></thead>
+        <tbody id="tbody-historico"></tbody>
+      </table>
+    </div>
   </section>
 
   <section class="tarjeta">
@@ -244,6 +257,41 @@ async function carga(day) {
   const wn = document.getElementById("wa-nota");
   wn.innerHTML = "{{ 'Envio por GoHighLevel configurado.' if tiene_ghl else 'WhatsApp NO configurado aun: rellena gohighlevel.api_key en config.json (funciona el modo enlace manual).' }}";
 
+  // historico por dia
+  const h = d.historico || {dias: [], ejecutivos: [], rend: {}, totales: {}};
+  window.__dias = h.dias;
+  const thh = document.getElementById("thead-historico");
+  thh.innerHTML = "<tr><th>D&iacute;a</th>" + h.ejecutivos.map(e =>
+    "<th class='num' title='" + e.nombre + "'>" + e.nombre.split(" ").map(p => p[0]).join("") + "</th>").join("") +
+    "<th class='num'>Total</th></tr>";
+  const tbh = document.getElementById("tbody-historico");
+  const maxTot = Math.max(1, ...h.dias.map(ds => {
+    const t = h.totales[ds] || {};
+    return (t.prospect||0) + (t.atendidos||0) + (t.cierres||0);
+  }));
+  tbh.innerHTML = h.dias.map(ds => {
+    const t = h.totales[ds] || {};
+    const g = (t.prospect||0) + (t.atendidos||0) + (t.cierres||0);
+    const sel = ds === d.dia ? " style='outline:2px solid var(--azul)'" : "";
+const cels = h.ejecutivos.map(e => {
+      const r = (h.rend[ds] || {}) [String(e.uid)] || {};
+      const v = (r.prospect||0) + (r.atendidos||0) + (r.cierres||0);
+      const pct = maxTot ? Math.round(v / maxTot * 100) : 0;
+      const bg = v ? `background:linear-gradient(to top,#e07b2a ${pct}%,#fff ${pct}%)` : "";
+      return `<td class="num" style="${bg}" title="${e.nombre}: Pros ${r.prospect||0} / Atd ${r.atendidos||0} / Cierre ${r.cierres||0} / $${(r.venta||0).toFixed(2)}"><b>${v}</b><div style="font-size:10px;color:#7a1e1e">${r.cierres||0}<span style="color:#1e8e5a"> $${(r.venta||0).toFixed(0)}</span></div></td>`;
+    }).join("");
+    return `<tr${sel}><td><a href="#" data-d="${ds}" class="dia-link">${ds}</a></td>${cels}<td class="num"><b>${g}</b><div style="font-size:10px">${t.cierres||0} cierres · $${(t.venta||0).toFixed(0)}</div></td></tr>`;
+  }).join("");
+  if (h.dias.length) {
+    document.getElementById("tbody-historico").addEventListener("click", ev => {
+      const a = ev.target.closest("a.dia-link");
+      if (!a) return;
+      ev.preventDefault();
+      document.getElementById("dia").value = a.dataset.d;
+      carga(a.dataset.d);
+    });
+  }
+
   // PDFs del mes
   const mes = document.getElementById("mes").value;
   fetch("/api/pdfs?month=" + mes).then(r => r.json()).then(j => {
@@ -328,6 +376,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("btn-ver").onclick = () => carga(document.getElementById("dia").value);
   document.getElementById("dia").onchange = () => carga(document.getElementById("dia").value);
+
+  document.getElementById("btn-ante").onclick = () => {
+    const dias = window.__dias || [];
+    const cur = document.getElementById("dia").value;
+    const i = dias.indexOf(cur);
+    if (i > 0) { document.getElementById("dia").value = dias[i - 1]; carga(dias[i - 1]); }
+  };
+  document.getElementById("btn-sig").onclick = () => {
+    const dias = window.__dias || [];
+    const cur = document.getElementById("dia").value;
+    const i = dias.indexOf(cur);
+    if (i >= 0 && i < dias.length - 1) { document.getElementById("dia").value = dias[i + 1]; carga(dias[i + 1]); }
+  };
 
   document.getElementById("tbody-daily").addEventListener("click", e => {
     const btn = e.target.closest("button[data-u]");
