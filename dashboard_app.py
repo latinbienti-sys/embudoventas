@@ -11,10 +11,11 @@ from datetime import date, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from flask import Flask, jsonify, render_template, request, send_file
+from flask import Flask, jsonify, render_template, request, send_file, Response
 
 import store
 import monthly_pdf
+import graficos
 
 BASE = Path(__file__).parent
 
@@ -338,6 +339,17 @@ def api_store_contact():
     delta = int(body.get("delta", 1))
     new_count = store.increment_store_contact(cfg["sqlite_path"], day, uid, delta)
     return jsonify({"ok": True, "odoo_uid": uid, "count": new_count})
+
+
+@app.route("/api/grafico")
+def api_grafico():
+    nombre = request.args.get("ejecutivo", "GLOBAL")
+    hist = build_historico()
+    series = [h["nombre"] for h in hist["ejecutivos"]]
+    if nombre not in series:
+        nombre = "GLOBAL"
+    png = graficos.grafico_historico(hist, nombre)
+    return Response(png, mimetype="image/png")
 
 
 @app.route("/api/gestion_enviar", methods=["POST"])

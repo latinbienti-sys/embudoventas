@@ -85,32 +85,26 @@ def main():
             shutil.copy(p, PDFS / p.name)
     archivos_pdf = sorted(host.name for host in PDFS.glob("*.pdf"))
 
-    # ---- historico por dia (matriz dias x ejecutivos) ----
-    execs = historico["ejecutivos"]
-    dias = historico["dias"]
-    maxg = max([1] + [
-        sum((historico["totales"][ds] or {}).get(k, 0) for k in ("prospect","atendidos","cierres"))
-        for ds in dias
-    ])
-    th_hist = "<tr><th>Día</th>" + "".join(
-        "<th class='num'>" + " ".join(n[0] for n in e["nombre"].split()[:2]) + "</th>"
-        for e in execs
-    ) + "<th class='num'>Total</th></tr>"
-    rows_hist = []
-    for ds in dias:
-        t = historico["totales"].get(ds, {})
-        g = sum(t.get(k, 0) for k in ("prospect","atendidos","cierres"))
-        celdas = []
-        for e in execs:
-            r = (historico["rend"].get(ds, {}) or {}).get(str(e["uid"]), {})
-            v = sum((r.get(k, 0) for k in ("prospect","atendidos","cierres")))
-            pct = round(v / maxg * 100) if v else 0
-            st = f"background:linear-gradient(to top,#e07b2a {pct}%,#fff {pct}%)" if v else ""
-            celdas.append(f"<td class='num' style='{st}' title='{esc(e['nombre'])}: Pros {r.get('prospect',0)} / Atd {r.get('atendidos',0)} / Cierre {r.get('cierres',0)} / ${r.get('venta',0):,.2f}'><b>{v}</b><div style='font-size:10px;color:#7a1e1e'>{r.get('cierres',0)} <span style='color:#1e8e5a'>${r.get('venta',0):,.0f}</span></div></td>")
-        rows_hist.append(f"<tr><td>{ds}</td>{''.join(celdas)}<td class='num'><b>{g}</b><div style='font-size:10px'>{t.get('cierres',0)} cierres · ${t.get('venta',0):,.0f}</div></td></tr>")
-    tabla_historico = (
-        f"<div style='overflow-x:auto'><table><thead>{th_hist}</thead>"
-        f"<tbody>{''.join(rows_hist)}</tbody></table></div>"
+    # ---- historico grafico por ejecutivo (PNG pregenerados) ----
+    IMG = SITE / "img"
+    IMG.mkdir(exist_ok=True)
+    import graficos
+    opts = []
+    shafts = []
+    for i, x in enumerate([{"nombre": "GLOBAL"}] + historico["ejecutivos"]):
+        nom = x["nombre"]
+        archivo = "hist_" + ("global" if nom == "GLOBAL" else store.normalize(nom).replace(" ", "_")) + ".png"
+        (IMG / archivo).write_bytes(graficos.grafico_historico(historico, nom))
+        sel = " selected" if nom == "GLOBAL" else ""
+        opts.append(f"<option value='{archivo}'{sel}>{esc(nom)}</option>")
+    historico_grafico = (
+        "<div class='barra' style='margin-bottom:10px'>"
+        f"<label>Ejecutivo: <select id='sel-hist'>{''.join(opts)}</select></label></div>"
+        f"<img id='img-hist' src='img/hist_global.png' style='max-width:100%;border:1px solid var(--borde);border-radius:8px'>"
+        "<script>"
+        "(function(){var s=document.getElementById('sel-hist'),im=document.getElementById('img-hist');"
+        "s.onchange=function(){im.src='img/'+s.value;};})();"
+        "</script>"
     )
 
     # ---- filas diarias ----
@@ -293,9 +287,9 @@ def main():
   </section>
 
   <section class="tarjeta">
-    <h2>Hist&oacute;rico por d&iacute;a (gesti&oacute;n: prospectados + atendidos + cierres) y venta</h2>
-    <p class="nota">Celda = total de gesti&oacute;n del d&iacute;a por ejecutivo (prospect + atend + cierres). Debajo de cada n&uacute;mero: cierres y venta del d&iacute;a.</p>
-    {tabla_historico}
+    <h2>Hist&oacute;rico de gesti&oacute;n por ejecutivo</h2>
+    <p class="nota">Barras = gesti&oacute;n del d&iacute;a (prospectados + atendidos + cierres). L&iacute;nea roja = venta del d&iacute;a. Selecciona un ejecutivo para ver su historial.</p>
+    {historico_grafico}
   </section>
 
   <section class="tarjeta">

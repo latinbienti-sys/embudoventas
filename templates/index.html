@@ -114,11 +114,20 @@
   </section>
 
   <section class="tarjeta">
-    <h2>Hist&oacute;rico por d&iacute;a (cliente atendidos, cierres y venta)</h2>
-    <p class="nota">Haz clic en un d&iacute;a para ver el detalle completo de ese d&iacute;a abajo. Celda = total gesti&oacute;n del d&iacute;a (prospect+atend+cierres); l&iacute;neas: cierres y venta.</p>
+    <h2>Hist&oacute;rico de gesti&oacute;n por ejecutivo</h2>
+    <div class="barra">
+      <label>Ejecutivo:
+        <select id="sel-ejecutivo"></select>
+      </label>
+      <span class="sub">Barras = gesti&oacute;n del d&iacute;a (prospectados + atendidos + cierres). L&iacute;nea roja = venta del d&iacute;a.</span>
+    </div>
+    <img id="img-historico" alt="Grafico historico" style="max-width:100%;border:1px solid var(--borde);border-radius:8px">
     <div style="overflow-x:auto">
       <table>
-        <thead id="thead-historico"></thead>
+        <thead><tr>
+          <th>D&iacute;a</th><th class="num">Prospectados</th><th class="num">Atendidos</th>
+          <th class="num">Cierres</th><th class="num">Venta del d&iacute;a</th>
+        </tr></thead>
         <tbody id="tbody-historico"></tbody>
       </table>
     </div>
@@ -257,40 +266,34 @@ async function carga(day) {
   const wn = document.getElementById("wa-nota");
   wn.innerHTML = "{{ 'Envio por GoHighLevel configurado.' if tiene_ghl else 'WhatsApp NO configurado aun: rellena gohighlevel.api_key en config.json (funciona el modo enlace manual).' }}";
 
-  // historico por dia
+// historico por ejecutivo (grafico + tabla)
   const h = d.historico || {dias: [], ejecutivos: [], rend: {}, totales: {}};
   window.__dias = h.dias;
-  const thh = document.getElementById("thead-historico");
-  thh.innerHTML = "<tr><th>D&iacute;a</th>" + h.ejecutivos.map(e =>
-    "<th class='num' title='" + e.nombre + "'>" + e.nombre.split(" ").map(p => p[0]).join("") + "</th>").join("") +
-    "<th class='num'>Total</th></tr>";
-  const tbh = document.getElementById("tbody-historico");
-  const maxTot = Math.max(1, ...h.dias.map(ds => {
-    const t = h.totales[ds] || {};
-    return (t.prospect||0) + (t.atendidos||0) + (t.cierres||0);
-  }));
-  tbh.innerHTML = h.dias.map(ds => {
-    const t = h.totales[ds] || {};
-    const g = (t.prospect||0) + (t.atendidos||0) + (t.cierres||0);
-    const sel = ds === d.dia ? " style='outline:2px solid var(--azul)'" : "";
-const cels = h.ejecutivos.map(e => {
-      const r = (h.rend[ds] || {}) [String(e.uid)] || {};
-      const v = (r.prospect||0) + (r.atendidos||0) + (r.cierres||0);
-      const pct = maxTot ? Math.round(v / maxTot * 100) : 0;
-      const bg = v ? `background:linear-gradient(to top,#e07b2a ${pct}%,#fff ${pct}%)` : "";
-      return `<td class="num" style="${bg}" title="${e.nombre}: Pros ${r.prospect||0} / Atd ${r.atendidos||0} / Cierre ${r.cierres||0} / $${(r.venta||0).toFixed(2)}"><b>${v}</b><div style="font-size:10px;color:#7a1e1e">${r.cierres||0}<span style="color:#1e8e5a"> $${(r.venta||0).toFixed(0)}</span></div></td>`;
-    }).join("");
-    return `<tr${sel}><td><a href="#" data-d="${ds}" class="dia-link">${ds}</a></td>${cels}<td class="num"><b>${g}</b><div style="font-size:10px">${t.cierres||0} cierres · $${(t.venta||0).toFixed(0)}</div></td></tr>`;
-  }).join("");
-  if (h.dias.length) {
-    document.getElementById("tbody-historico").addEventListener("click", ev => {
-      const a = ev.target.closest("a.dia-link");
-      if (!a) return;
-      ev.preventDefault();
-      document.getElementById("dia").value = a.dataset.d;
-      carga(a.dataset.d);
+  const sel = document.getElementById("sel-ejecutivo");
+  sel.innerHTML = '<option value="GLOBAL">GLOBAL</option>' +
+    h.ejecutivos.map(e => '<option value="' + e.nombre + '">' + e.nombre + '</option>').join("");
+  const img = document.getElementById("img-historico");
+  const pintar = () => {
+    const nom = sel.value;
+    img.src = "/api/grafico?ejecutivo=" + encodeURIComponent(nom);
+    const tbc = document.getElementById("tbody-historico");
+    const seria = h.dias.map(ds => {
+      const r = nom === "GLOBAL"
+        ? (h.totales[ds] || {})
+        : (h.rend[ds] || {})[String((h.ejecutivos.find(e => e.nombre === nom) || {}).uid)];
+      return {ds, r: r || {}};
     });
-  }
+    tbc.innerHTML = seria.map(({ds, r}) =>
+      `<tr><td>${ds}</td><td class="num">${r.prospect||0}</td><td class="num">${r.atendidos||0}</td>` +
+      `<td class="num">${r.cierres||0}</td><td class="num">${Number(r.venta||0).toFixed(2)}</td></tr>`).join("");
+    const s = {prospect: 0, atendidos: 0, cierres: 0, venta: 0};
+    seria.forEach(({r}) => { s.prospect += r.prospect||0; s.atendidos += r.atendidos||0; s.cierres += r.cierres||0; s.venta += r.venta||0; });
+    tbc.insertAdjacentHTML("beforeend",
+      `<tr class="total"><td>Total</td><td class="num">${s.prospect}</td><td class="num">${s.atendidos}</td>` +
+      `<td class="num">${s.cierres}</td><td class="num">${Number(s.venta).toFixed(2)}</td></tr>`);
+  };
+  sel.onchange = pintar;
+  pintar();
 
   // PDFs del mes
   const mes = document.getElementById("mes").value;
