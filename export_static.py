@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 """Genera la version estatica del tablero para GitHub Pages (docs/).
 
-Se ejecuta tras cada sincronizacion (sincronizar.bat) y al crear los PDFs
-(pdf_mensual.bat), y se sube con:
+Se ejecuta tras cada sincronizacion (sincronizar.bat / sincronizar_horaria.bat)
+y al crear los PDFs (pdf_mensual.bat), y se sube con:
     python export_static.py  ->  crea docs/index.html + docs/pdf/*.pdf
 La pagina queda publica en https://latinbienti-sys.github.io/embudoventas/
-(La version con botones +/- y consulta viva a Odoo sigue siendo el tablero
-local: http://127.0.0.1:8080)
+
+La pagina embebe todos los dias del cache (JSON) y el filtro Desde/Hasta se
+aplica 100% en el navegador, sin servidor. (La version con botones +/- y
+consulta viva sigue siendo el tablero local: http://127.0.0.1:8080)
 """
+import json
 import shutil
 from datetime import date, datetime
 from pathlib import Path
@@ -23,25 +26,30 @@ MESES = {1: "enero", 2: "febrero", 3: "marzo", 4: "abril", 5: "mayo", 6: "junio"
          7: "julio", 8: "agosto", 9: "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre"}
 
 CSS = """
-:root { --azul:#0f3b6e; --naranja:#e07b2a; --gris:#eef1f5; --borde:#d3dae3; }
+:root { --azul:#0f3b6e; --verde:#1e8e5a; --naranja:#e07b2a; --rojo:#8a1d1d; --gris:#eef1f5; --borde:#d3dae3; }
 * { box-sizing: border-box; }
 body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; background: #f4f6f9; color: #1c2733; }
-header { background: var(--azul); color: #fff; padding: 14px 22px; }
+header { background: var(--azul); color: #fff; padding: 14px 22px; display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
 header h1 { font-size: 18px; margin: 0 0 2px; }
 .sub { font-size: 12px; opacity: .85; }
 main { padding: 20px; max-width: 1200px; margin: 0 auto; }
+.barra { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+.barra input, .barra button, .barra select { font-size:14px; padding:7px 10px; border:1px solid var(--borde); border-radius:6px; }
+.btn { background: var(--azul); color:#fff; border:none; cursor:pointer; }
+.btn:hover { filter:brightness(1.1); }
+.b { border-radius:6px; padding:2px 9px; font-size:13px; line-height:1.4; border:1px solid var(--borde); background:#fff; cursor:pointer; }
 .tarjeta { background: #fff; border: 1px solid var(--borde); border-radius: 10px; padding: 16px; margin-bottom: 18px; }
 .tarjeta h2 { margin: 0 0 12px; font-size: 15px; color: var(--azul); }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { border-bottom: 1px solid var(--gris); padding: 8px 10px; text-align: left; }
 th { background: #f8fafc; color: #56657a; font-weight: 600; }
 tr.total td { font-weight: 700; background: #f2f7ff; }
-.num { text-align: center; }
+.num { text-align: center; font-variant-numeric: tabular-nums; }
 .bar-fondo { background: var(--gris); border-radius: 8px; height: 16px; min-width: 80px; }
 .bar-fondo > i { display:block; height: 16px; border-radius: 8px; background: var(--naranja); font-style: normal; color:#fff; font-size:10px; line-height:16px; padding-left:4px; }
 a.pdf { display:inline-block; margin:0 6px 8px 0; padding:6px 12px; border:1px solid var(--borde); border-radius:6px; text-decoration:none; color:var(--azul); background:#fff; font-size:13px; }
 .nota { font-size: 12px; color: #56657a; }
-.aviso { color:#8a1d1d; font-weight:600; }
+.aviso { color:var(--rojo); font-weight:600; }
 .foot { color:#8a939c; font-size:12px; margin-top:10px; text-align:center; }
 .pestanas { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
 .pestanas button { border:1px solid var(--borde); background:#fff; border-radius:6px; padding:7px 13px; font-size:13px; cursor:pointer; color:#3a4a5c; }
@@ -51,11 +59,283 @@ a.pdf { display:inline-block; margin:0 6px 8px 0; padding:6px 12px; border:1px s
 .graf-dia .col i { display:block; width:100%; background:var(--naranja); border-radius:3px 3px 0 0; position:relative; }
 .graf-dia .col span { font-size:10px; color:#56657a; }
 .graf-dia .col b { font-size:10px; }
+.legend span { display:inline-block; width:10px; height:10px; margin:0 4px 0 12px; vertical-align:middle; }
 """
 
 
 def esc(t):
     return str(t).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+
+JS = r"""
+var D = JSON.parse(document.getElementById('data').textContent);
+var uids = D.execs.map(function(e){ return e.uid; });
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function pad(n){ return (n<10?'0':'')+n; }
+function dinero(n){ n = Math.round(Number(n)||0); return n.toLocaleString('en-US'); }
+function cierreStage(){ var cs=null; (D.stages||[]).forEach(function(s){ if(s.toLowerCase().indexOf('cierre')>=0) cs=s; }); return cs; }
+function diasInRange(a,b){ return (D.dias||[]).filter(function(d){ return d>=a && d<=b; }); }
+function diasDelMes(ym){ return (D.dias||[]).filter(function(d){ return d.indexOf(ym)===0; }); }
+function sumDia(daysArr,uid){ var o={c:0,t:0,s:0,a:0}; daysArr.forEach(function(ds){ var dd=(D.daily[ds]||{})[uid]; if(dd){ o.c+=dd.c; o.t+=dd.t; o.s+=dd.s; o.a+=dd.a; } }); return o; }
+function sumMov(daysArr,uid,stage){ var n=0; daysArr.forEach(function(ds){ var mm=(D.moves[ds]||{})[uid]||{}; n += mm[stage]||0; }); return n; }
+function sumVen(daysArr,uid){ var n=0; daysArr.forEach(function(ds){ var vv=(D.ventas[ds]||{})[uid]||0; n+=vv; }); return n; }
+function logrado(uid,stage,daysArr){
+  if(stage==='Contacto Tienda') return sumDia(daysArr,uid).s;
+  if(stage==='Seguimiento whatsapp Corporativo') return sumDia(daysArr,uid).a;
+  return sumMov(daysArr,uid,stage);
+}
+
+var estado = { desde:'', hasta:'' };
+
+function renderDaily(){
+  var days = diasInRange(estado.desde, estado.hasta);
+  var filas = D.execs.map(function(e){
+    var x = sumDia(days, e.uid), tot = x.c+x.t+x.s;
+    return '<tr><td>'+esc(e.nombre)+'</td><td class="num">'+x.c+'</td><td class="num">'+x.t+'</td>'+
+           '<td class="num">'+x.a+'</td><td class="num">'+x.s+'</td><td class="num">'+tot+'</td></tr>';
+  }).join('');
+  var tv={c:0,t:0,s:0,a:0};
+  D.execs.forEach(function(e){ var x=sumDia(days,e.uid); tv.c+=x.c; tv.t+=x.t; tv.s+=x.s; tv.a+=x.a; });
+  document.getElementById('tbody-daily').innerHTML = filas +
+    '<tr class="total"><td>Total</td><td class="num">'+tv.c+'</td><td class="num">'+tv.t+'</td>'+
+    '<td class="num">'+tv.a+'</td><td class="num">'+tv.s+'</td><td class="num">'+(tv.c+tv.t+tv.s)+'</td></tr>';
+}
+
+function renderFunnel(){
+  var ym = estado.hasta.slice(0,7);
+  var days = diasDelMes(ym);
+  var stages = D.stages||[];
+  document.getElementById('funnel-mes').innerHTML = ym;
+  var maxf = 1;
+  var rows = D.execs.map(function(e){
+    var row = {nombre:e.nombre};
+    stages.forEach(function(st){ row[st] = logrado(e.uid,st,days)||0; });
+    stages.forEach(function(st){ if(row[st]>maxf) maxf=row[st]; });
+    return row;
+  });
+  var totals = {}; stages.forEach(function(st){ totals[st]=0; });
+  rows.forEach(function(r){ stages.forEach(function(st){ totals[st]+=r[st]; }); });
+  document.getElementById('thead-funnel').innerHTML = '<tr><th>Ejecutivo</th>'+
+    stages.map(function(s){ return '<th>'+esc(s)+'</th>'; }).join('')+'</tr>';
+  document.getElementById('tbody-funnel').innerHTML = rows.map(function(r){
+    var celdas = stages.map(function(s){
+      var v=r[s]||0, an=Math.round(v/maxf*100);
+      return '<td class="num"><div class="bar-fondo"><i style="width:'+an+'%">&nbsp;'+v+'</i></div></td>';
+    }).join('');
+    return '<tr><td>'+esc(r.nombre)+'</td>'+celdas+'</tr>';
+  }).join('') + '<tr class="total"><td>Total</td>'+
+    stages.map(function(s){ return '<td class="num">'+totals[s]+'</td>'; }).join('')+'</tr>';
+}
+
+function renderGestion(){
+  var days = diasInRange(estado.desde, estado.hasta), nd = days.length;
+  var stages = D.stages||[];
+  var meta = {}; stages.forEach(function(s){ meta[s]=Math.round((D.meta_diaria[s]||0)*nd); });
+  var filas = D.execs.map(function(e){
+    var celdas = stages.map(function(s){
+      var lo = logrado(e.uid,s,days)||0, pe = Math.max(0, meta[s]-lo), ok = lo>=meta[s];
+      var color = ok ? '#1e8e5a' : '#0f3b6e';
+      return '<td class="num"><b style="color:'+color+'">'+lo+'</b><div class="nota" style="font-size:10px">pend '+pe+'</div></td>';
+    }).join('');
+    return '<tr><td>'+esc(e.nombre)+'</td>'+celdas+'</tr>';
+  }).join('');
+  var tot={meta:0,log:0};
+  document.getElementById('thead-gestion').innerHTML =
+    '<tr><th>Ejecutivo</th>'+stages.map(function(s){return '<th>'+esc(s)+'</th>';}).join('')+'</tr>'+
+    '<tr class="total"><th>Meta del rango ('+nd+' d&iacute;as)</th>'+
+    stages.map(function(s){ tot.meta += meta[s]; return '<th class="num">'+meta[s]+'</th>'; }).join('')+'</tr>';
+  document.getElementById('tbody-gestion').innerHTML = filas;
+  var totlog = stages.map(function(s){
+    var t=0; D.execs.forEach(function(e){ t += logrado(e.uid,s,days)||0; }); return '<td class="num">'+t+'</td>';
+  }).join('');
+  document.getElementById('tfoot-gestion').innerHTML = '<tr class="total"><td>Total logrado</td>'+totlog+'</tr>';
+  var ym = estado.hasta.slice(0,7), md = diasDelMes(ym);
+  var fecha = new Date(estado.hasta.slice(0,4), +estado.hasta.slice(5,7)-1, 1).toLocaleDateString('es', {month:'long', year:'numeric'});
+  var vLog=0; D.execs.forEach(function(e){ vLog += sumVen(md,e.uid); });
+  var vMeta = Math.round(D.sales_meta||0), vPend = Math.max(0, vMeta-vLog);
+  document.getElementById('gestion-venta').innerHTML =
+    'Venta del mes (<b>'+fecha+'</b>): <b>US$'+dinero(vLog)+'</b> &middot; Meta: US$'+dinero(vMeta)+
+    ' &middot; Pendiente: US$'+dinero(vPend);
+}
+
+function renderCierre(){
+  var days = diasInRange(estado.desde, estado.hasta);
+  var cs = cierreStage();
+  var filas = D.execs.map(function(e){
+    var x = sumDia(days,e.uid);
+    var venta = sumVen(days,e.uid), cierres = cs ? (sumMov(days,e.uid,cs)||0) : 0;
+    return '<tr><td>'+esc(e.nombre)+'</td><td class="num">'+x.c+'</td><td class="num">'+x.t+'</td>'+
+           '<td class="num">'+x.s+'</td><td class="num"><b style="color:'+(cierres?'#1e8e5a':'#0f3b6e')+'">'+cierres+'</b></td>'+
+           '<td class="num"><b>US$'+dinero(venta)+'</b></td></tr>';
+  }).join('');
+  var tv={p:0,a:0,s:0,ci:0,v:0};
+  D.execs.forEach(function(e){ var x=sumDia(days,e.uid); tv.p+=x.c; tv.a+=x.t; tv.s+=x.s;
+      var ci = cs ? (sumMov(days,e.uid,cs)||0) : 0; tv.ci+=ci; tv.v+=sumVen(days,e.uid); });
+  document.getElementById('tbody-cierre').innerHTML = filas +
+    '<tr class="total"><td>Total</td><td class="num">'+tv.p+'</td><td class="num">'+tv.a+'</td>'+
+    '<td class="num">'+tv.s+'</td><td class="num">'+tv.ci+'</td><td class="num">US$'+dinero(tv.v)+'</td></tr>';
+  document.getElementById('cierre-nota').innerHTML =
+    'Resultado del <b>'+estado.desde+'</b> al <b>'+estado.hasta+'</b>: prospectaron <b>'+tv.p+'</b>, '+
+    'atendieron <b>'+tv.a+'</b>, cerraron <b>'+tv.ci+'</b>.';
+}
+
+function histChart(ss){
+  var n=ss.length; if(!n) return '<p class="nota">Sin datos en el rango.</p>';
+  var W = Math.max(320, n*52+52), H = 205, padL=42, padB=24, padT=8;
+  var IW = W-padL, IH = H-padB-padT;
+  var maxB = 1; ss.forEach(function(x){ var s=x.p+x.a+x.c; if(s>maxB) maxB=s; });
+  var maxV = 1; ss.forEach(function(x){ if(x.v>maxV) maxV=x.v; });
+  var stepB = Math.ceil(maxB/4), stepV = Math.ceil(maxV/4);
+  var bw = Math.min(34, Math.floor((IW-8)/n));
+  var out = '<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg">';
+  for(var k=0;k<=4;k++){
+    var y = padT+IH - IH*k/4;
+    out += '<line x1="'+padL+'" y1="'+y+'" x2="'+W+'" y2="'+y+'" stroke="#eef1f5"/>';
+    out += '<text x="'+(padL-6)+'" y="'+(y+4)+'" font-size="10" fill="#56657a" text-anchor="end">'+(k*stepB)+'</text>';
+    out += '<text x="'+(W-2)+'" y="'+(y+4)+'" font-size="10" fill="#8a1d1d" text-anchor="end">'+(k*stepV)+'</text>';
+  }
+  var pit;
+  ss.forEach(function(x,i){
+    var cx = padL + (IW/n)*i + (IW/n)/2;
+    var bwNow = bw;
+    var yt = padT+IH - IH*(x.a+x.c)/maxB, yi = padT+IH - IH*x.c/maxB, yp = padT+IH - IH*(x.p+x.a+x.c)/maxB;
+    out += '<rect x="'+(cx-bwNow/2)+'" y="'+yt+'" width="'+bwNow+'" height="'+Math.max(0,IH*(x.a+x.c)/maxB)+'" fill="#1e8e5a"/>';
+    out += '<rect x="'+(cx-bwNow/2)+'" y="'+yi+'" width="'+bwNow+'" height="'+Math.max(0,IH*x.c/maxB)+'" fill="#e07b2a"/>';
+    out += '<rect x="'+(cx-bwNow/2)+'" y="'+yp+'" width="'+bwNow+'" height="'+Math.max(0,IH*x.p/maxB)+'" fill="#2f7cc9"/>';
+    var vy = padT+IH - IH*x.v/maxV;
+    if(i===0){ pit = 'M'+cx+' '+vy; } else { pit += ' L'+cx+' '+vy; }
+  });
+  out += '<path d="'+pit+'" fill="none" stroke="#8a1d1d" stroke-width="2"/>';
+  ss.forEach(function(x,i){
+    var cx = padL + (IW/n)*i + (IW/n)/2;
+    var vy = padT+IH - IH*x.v/maxV;
+    out += '<circle cx="'+cx+'" cy="'+vy+'" r="2.5" fill="#8a1d1d"/>';
+    var lab = x.ds.slice(5);
+    if(n>14 && i%3!==0) return;
+    out += '<text x="'+cx+'" y="'+(H-6)+'" font-size="9" fill="#56657a" text-anchor="middle">'+lab+'</text>';
+  });
+  out += '</svg>';
+  return out;
+}
+
+function renderHistorico(nombre){
+  var days = diasInRange(estado.desde, estado.hasta);
+  var uid = null;
+  D.execs.forEach(function(e){ if(e.nombre===nombre) uid=e.uid; });
+  var ss = days.map(function(ds){
+    var p=0,a=0,ci=0,v=0;
+    if(uid!==null){
+      var x = sumDia([ds],uid);
+      p=x.c; a=x.t; ci=cierreStage()?(sumMov([ds],uid,cierreStage())||0):0; v=sumVen([ds],uid);
+    } else {
+      D.execs.forEach(function(e){
+        var x=sumDia([ds],e.uid);
+        p+=x.c; a+=x.t; ci+=cierreStage()?(sumMov([ds],e.uid,cierreStage())||0):0; v+=sumVen([ds],e.uid);
+      });
+    }
+    return {ds:ds, p:p, a:a, c:ci, v:v};
+  });
+  document.getElementById('hist-chart').innerHTML = histChart(ss);
+  document.getElementById('tbody-historico').innerHTML = ss.map(function(x){
+    return '<tr><td>'+x.ds+'</td><td class="num">'+x.p+'</td><td class="num">'+x.a+'</td>'+
+           '<td class="num">'+x.c+'</td><td class="num">'+dinero(x.v)+'</td></tr>';
+  }).join('');
+  var tp=0,ta=0,tc=0,tv=0;
+  ss.forEach(function(x){ tp+=x.p; ta+=x.a; tc+=x.c; tv+=x.v; });
+  document.getElementById('tbody-historico').insertAdjacentHTML('beforeend',
+    '<tr class="total"><td>Total</td><td class="num">'+tp+'</td><td class="num">'+ta+'</td>'+
+    '<td class="num">'+tc+'</td><td class="num">'+dinero(tv)+'</td></tr>');
+}
+
+function renderVista(){
+  var ym = estado.hasta.slice(0,7);
+  var days = diasDelMes(ym);
+  var stages = D.stages||[];
+  function vrow(e){
+    var funnel = {};
+    stages.forEach(function(st){ funnel[st] = logrado(e.uid,st,days)||0; });
+    var serie = days.map(function(ds){ var x=sumDia([ds],e.uid); return x.c+x.t+x.s; });
+    return {nombre:e.nombre, funnel:funnel, serie:serie, venta:sumVen(days,e.uid)};
+  }
+  var rows = D.execs.map(vrow);
+  var global = {nombre:'GLOBAL', funnel:{}, serie:[], venta:0};
+  stages.forEach(function(st){ global.funnel[st]=0; rows.forEach(function(r){ global.funnel[st]+=r.funnel[st]; }); });
+  for(var i=0;i<days.length;i++){ global.serie[i]=0; rows.forEach(function(r){ global.serie[i]+=r.serie[i]||0; }); }
+  rows.forEach(function(r){ global.venta += r.venta; });
+  var items = [global].concat(rows);
+  var maxf=1, maxd=1;
+  items.forEach(function(x){ stages.forEach(function(st){ if(x.funnel[st]>maxf) maxf=x.funnel[st]; }); x.serie.forEach(function(v){ if(v>maxd) maxd=v; }); });
+  var fecha = new Date(estado.hasta.slice(0,4), +estado.hasta.slice(5,7)-1, 1).toLocaleDateString('es', {month:'long', year:'numeric'});
+  var metaV = Math.round(D.sales_meta||0);
+  document.getElementById('pestanas').innerHTML = items.map(function(x,i){
+    return '<button data-i="'+i+'" class="'+(i?'':'activa')+'">'+esc(x.nombre)+'</button>';
+  }).join('');
+  document.getElementById('panel-vista').innerHTML = items.map(function(x,i){
+    var celdas = stages.map(function(st){
+      var v=x.funnel[st]||0, an=Math.round(v/maxf*100);
+      return '<td class="num"><div class="bar-fondo"><i style="width:'+an+'%">&nbsp;'+v+'</i></div></td>';
+    }).join('');
+    var cols = x.serie.map(function(v,di){
+      var hh=Math.max(3, Math.round(v/maxd*95));
+      return '<div class="col"><b>'+v+'</b><i style="height:'+hh+'px"></i><span>'+(di+1)+'</span></div>';
+    }).join('');
+    var pend = Math.max(0, metaV-x.venta);
+    return '<div class="vista-panel" data-i="'+i+'"'+(i?' hidden':'')+'>'+
+      '<p class="nota"><b>Informe del mes '+esc(fecha)+'</b> &mdash; '+esc(x.nombre)+'</p>'+
+      '<div style="overflow-x:auto"><table><thead><tr><th>Flujo (embudo del mes)</th>'+
+      stages.map(function(s){ return '<th class="num">'+esc(s)+'</th>'; }).join('')+'</tr></thead>'+
+      '<tbody><tr><td>'+esc(x.nombre)+'</td>'+celdas+'</tr></tbody></table></div>'+
+      '<p class="nota">Venta mensual: <b>US$'+dinero(x.venta)+'</b> &middot; Meta: US$'+dinero(metaV)+
+      ' &middot; Pendiente: US$'+dinero(pend)+'</p>'+
+      '<p class="nota">Atenci&oacute;n diaria del mes (creados + atendidos + contacto tienda)</p>'+
+      '<div class="graf-dia">'+cols+'</div></div>';
+  }).join('');
+  Array.prototype.forEach.call(document.querySelectorAll('#pestanas button'), function(b){ b.onclick = tabClick; });
+}
+function tabClick(){
+  var bts = document.querySelectorAll('#pestanas button');
+  bts.forEach(function(b){ b.classList.remove('activa'); });
+  this.classList.add('activa');
+  Array.prototype.forEach.call(document.querySelectorAll('#panel-vista .vista-panel'), function(p){
+    p.hidden = String(p.getAttribute('data-i')) !== this.getAttribute('data-i');
+  }, this);
+}
+
+function todo(){
+  renderDaily();
+  renderFunnel();
+  renderGestion();
+  renderCierre();
+  renderHistorico(selHist.value);
+  renderVista();
+}
+
+var selHist = null;
+document.addEventListener('DOMContentLoaded', function(){
+  var fd = document.getElementById('fecha-desde'), fh = document.getElementById('fecha-hasta');
+  var ULT = D.dias[D.dias.length-1], PRI = D.dias[0];
+  fd.min = fh.min = PRI; fd.max = fh.max = ULT;
+  estado.desde = estado.hasta = ULT;
+  fd.value = fh.value = ULT;
+  document.getElementById('rango-datos').textContent = PRI + ' a ' + ULT;
+
+  selHist = document.getElementById('sel-hist');
+  selHist.innerHTML = '<option value="GLOBAL">GLOBAL</option>' +
+    D.execs.map(function(e){ return '<option value="'+esc(e.nombre)+'">'+esc(e.nombre)+'</option>'; }).join('');
+  selHist.onchange = function(){ renderHistorico(selHist.value); };
+
+  document.getElementById('btn-ver').onclick = function(){
+    if(fd.value>fh.value){ var t=fd.value; fd.value=fh.value; fh.value=t; }
+    estado.desde = fd.value; estado.hasta = fh.value;
+    todo();
+  };
+  fd.onchange = function(){ if(fd.value>fh.value) fh.value=fd.value; estado.desde=fd.value; todo(); };
+  fh.onchange = function(){ if(fh.value<fd.value) fd.value=fh.value; estado.hasta=fh.value; todo(); };
+
+  todo();
+});
+"""
 
 
 def main():
@@ -66,13 +346,35 @@ def main():
     if not last:
         raise SystemExit("Sin datos: primero ejecuta sincronizar.bat")
     dia = date.fromisoformat(last[:10])
-    month_start = dia.replace(day=1)
 
-    daily, daily_total = dashboard_app.build_daily_panel(dia, dia)
-    header, funnel, funnel_total = dashboard_app.build_funnel(dia)
-    gestion = dashboard_app.build_gestion(dia, dia)
-    cierre = dashboard_app.build_cierre(dia, dia)
-    historico = dashboard_app.build_historico()
+    dias = store.get_dias_disponibles(dashboard_app.cfg["sqlite_path"])
+    execs = dashboard_app._active_execs()
+
+    # ---- datos diarios por dia (para filtrar en el navegador) ----
+    daily, moves, ventas = {}, {}, {}
+    for ds in dias:
+        d = date.fromisoformat(ds)
+        rows, _ = dashboard_app.build_daily_panel(d, d)
+        daily[ds] = {str(r["uid"]): {"c": r["creados"], "t": r["atendidos"],
+                                     "s": r["tienda"], "a": r["actividades"]} for r in rows}
+        m = {}
+        for r in store.get_stage_moves_range(dashboard_app.cfg["sqlite_path"], d, d):
+            m.setdefault(str(r["odoo_uid"]), {})[r["stage"]] = r["count"]
+        moves[ds] = m
+        v = {}
+        for r in store.get_ventas_daily_range(dashboard_app.cfg["sqlite_path"], d, d):
+            v[str(r["odoo_uid"])] = r["amount"]
+        ventas[ds] = v
+
+    data_payload = {
+        "dias": dias,
+        "execs": [{"uid": str(e["odoo_uid"]), "nombre": e["name"]} for e in execs],
+        "stages": dashboard_app.cfg.get("funnel_stages", []),
+        "meta_diaria": dashboard_app.cfg.get("daily_meta", {}) or {},
+        "sales_meta": dashboard_app.cfg.get("sales_meta", 0) or 0,
+        "daily": daily, "moves": moves, "ventas": ventas,
+    }
+
     last_sync = store.last_sync_ok(dashboard_app.cfg["sqlite_path"])
     ahora = datetime.now().strftime("%Y-%m-%d %H:%M")
 
@@ -84,175 +386,11 @@ def main():
         for p in src_pdf.glob("*.pdf"):
             shutil.copy(p, PDFS / p.name)
     archivos_pdf = sorted(host.name for host in PDFS.glob("*.pdf"))
-
-    # ---- historico grafico por ejecutivo (PNG pregenerados, con rangos) ----
-    IMG = SITE / "img"
-    IMG.mkdir(exist_ok=True)
-    for viejo in IMG.glob("*.png"):
-        if not (viejo.name.endswith("_todo.png") or viejo.name.endswith("_7.png")
-                or viejo.name.endswith("_15.png") or viejo.name.endswith("_30.png")):
-            viejo.unlink()
-    import graficos
-    from datetime import timedelta
-    dias_hist = historico["dias"]
-    rangos = [("todo", None, "Todo"), ("30", dias_hist[-30] if len(dias_hist) > 30 else None, "Últimos 30"),
-              ("15", dias_hist[-15] if len(dias_hist) > 15 else None, "Últimos 15"),
-              ("7", dias_hist[-7] if len(dias_hist) > 7 else None, "Últimos 7")]
-    for x in [{"nombre": "GLOBAL"}] + historico["ejecutivos"]:
-        nom = x["nombre"]
-        base = "global" if nom == "GLOBAL" else store.normalize(nom).replace(" ", "_")
-        for tag, desde, _lbl in rangos:
-            archivo = f"hist_{base}_{tag}.png"
-            (IMG / archivo).write_bytes(graficos.grafico_historico(historico, nom, desde))
-
-    def _opciones(noms, id_base, activo_id):
-        return "".join(f"<option value='{esc(v)}'{(' selected' if v == activo_id else '')}>{esc(l)}</option>"
-                       for v, l in noms)
-
-    ops_exec = [("global", "GLOBAL")] + [(store.normalize(e["nombre"]).replace(" ", "_"), e["nombre"])
-                                         for e in historico["ejecutivos"]]
-    ops_rng = [(t, l) for t, _d, l in rangos]
-    seleccion = "hist_" + (ops_exec[0][0]) + "_todo.png"
-    historico_grafico = (
-        "<div class='barra' style='margin-bottom:10px'>"
-        "<label>Ejecutivo: <select id='sel-hist'>"
-        + _opciones(ops_exec, "sel-hist", ops_exec[0][0]) + "</select></label>"
-        "<label>Rango: <select id='sel-hist-rng'>"
-        + _opciones(ops_rng, "sel-hist-rng", "todo") + "</select></label></div>"
-        f"<img id='img-hist' src='img/{seleccion}' style='max-width:100%;border:1px solid var(--borde);border-radius:8px'>"
-        "<script>"
-        "(function(){var e=document.getElementById('sel-hist'),r=document.getElementById('sel-hist-rng'),im=document.getElementById('img-hist');"
-        "function act(){im.src='img/hist_'+e.value+'_'+r.value+'.png';}"
-        "e.onchange=act;r.onchange=act;})();"
-        "</script>"
-    )
-
-    # ---- filas diarias ----
-    filas_diarias = "".join(
-        f"<tr><td>{esc(r['nombre'])}</td><td class='num'>{r['creados']}</td>"
-        f"<td class='num'>{r['atendidos']}</td><td class='num'>{r['actividades']}</td>"
-        f"<td class='num'>{r['tienda']}</td><td class='num'>{r['total']}</td></tr>"
-        for r in daily
-    )
-    filas_diarias += (
-        f"<tr class='total'><td>Total</td><td class='num'>{daily_total['creados']}</td>"
-        f"<td class='num'>{daily_total['atendidos']}</td>"
-        f"<td class='num'>{daily_total['actividades']}</td>"
-        f"<td class='num'>{daily_total['tienda']}</td>"
-        f"<td class='num'>{daily_total['total']}</td></tr>"
-    )
-
-    # ---- embudo del mes con barras ----
-    maxf = max([1] + [r[s] or 0 for r in funnel for s in header[1:]])
-    filas_embudo = ""
-    for r in funnel:
-        celdas = ""
-        for s in header[1:]:
-            v = r[s] or 0
-            ancho = round(v / maxf * 100) if v else 0
-            celdas += (f"<td class='num'><div class='bar-fondo'>"
-                       f"<i style='width:{ancho}%'>&nbsp;{v}</i></div></td>")
-        filas_embudo += f"<tr><td>{esc(r['nombre'])}</td>{celdas}</tr>"
-    filas_embudo += "<tr class='total'><td>Total</td>" + "".join(
-        f"<td class='num'>{funnel_total[s] or 0}</td>" for s in header[1:]) + "</tr>"
-
-    encabezado_embudo = "<tr>" + "".join(f"<th>{esc(h)}</th>" for h in header) + "</tr>"
-
-    # ---- gestion diaria ----
-    gs = gestion["stages"]
-    mg = {s: (gestion["totals"][s]["meta"] if gestion["totals"].get(s) else 0) for s in gs}
-    filas_gestion = ""
-    for r in gestion["rows"]:
-        celdas = ""
-        for s in gs:
-            lo = r["logrado"].get(s, 0)
-            pe = r["pendiente"].get(s, 0)
-            color = "#1e8e5a" if r["ok"].get(s) else "#0f3b6e"
-            celdas += (f"<td class='num' style='border-bottom:1px solid var(--gris)'><b style='color:{color}'>{lo}</b>"
-                       f"<div class='nota' style='font-size:10px'>pend {pe}</div></td>")
-        filas_gestion += f"<tr><td>{esc(r['nombre'])}</td>{celdas}</tr>"
-    tot_log = "".join(f"<td class='num'>{gestion['totals'][s]['logrado']}</td>" for s in gs)
-    v = gestion["ventas"]
-    venta_txt = (f"Venta del mes (Cierre): <b>US${v['logrado']:,.0f}</b> &middot; "
-                 f"Meta: US${v['meta']:,.0f} &middot; Pendiente: US${v['pendiente']:,.0f}")
-
-    t = cierre["total"]
-    cierre_txt = (f"Resultado de la jornada del {dia.strftime('%d/%m/%Y')}: "
-                  f"prospectaron <b>{t['prospect']}</b>, atendieron <b>{t['atendidos']}</b>, "
-                  f"cerraron <b>{t['cierres']}</b>.")
-    filas_cierre = ""
-    for r in cierre["rows"]:
-        filas_cierre += (
-            f"<tr><td>{esc(r['nombre'])}</td><td class='num'>{r['prospect']}</td>"
-            f"<td class='num'>{r['atendidos']}</td><td class='num'>{r['tienda']}</td>"
-            f"<td class='num'><b style='color:{'#1e8e5a' if r['cierres'] else '#0f3b6e'}'>{r['cierres']}</b></td>"
-            f"<td class='num'>US${r['venta']:,.2f}</td></tr>"
-        )
-    filas_cierre += (
-        f"<tr class='total'><td>Total</td><td class='num'>{t['prospect']}</td>"
-        f"<td class='num'>{t['atendidos']}</td><td class='num'>{t['tienda']}</td>"
-        f"<td class='num'>{t['cierres']}</td><td class='num'>US${t['venta']:,.2f}</td></tr>"
-    )
-
-    # ---- enlaces PDF ----
     pdf_html = "".join(
         f'<a class="pdf" href="pdf/{esc(a)}" target="_blank">&#128196; {esc(a)}</a>' for a in archivos_pdf
     ) if archivos_pdf else "<span class='nota'>Sin PDFs aun (usa pdf_mensual.bat).</span>"
 
     est = f"&uacute;ltima sincronizaci&oacute;n: {esc(last_sync['run_at'])}" if last_sync else "sin sincronizar"
-    dia_txt = f"dia {dia.strftime('%d/%m/%Y')}"
-    mes_txt = f"{MESES[month_start.month]} {month_start.year}"
-
-    # ---- vista por ejecutivo (info como el PDF, en pestanas) ----
-    vista = dashboard_app.build_vista(dia)
-    v_items = [vista["global"]] + vista["rows"]
-    maxf = max([1] + [v for row in v_items for v in row["funnel"].values()])
-    maxd = max([1] + [v for row in v_items for v in row["serie"]])
-
-    vista_pest = "".join(
-        f"<button data-i='{i}' class='{('activa' if not i else '')}'>{esc(row['nombre'])}</button>"
-        for i, row in enumerate(v_items)
-    )
-    th_hdr = ['<th class="num">' + esc(s) + "</th>" for s in vista["stages"]]
-    vista_pan = []
-    for i, x in enumerate(v_items):
-        celdas = ""
-        for st in vista["stages"]:
-            v = x["funnel"].get(st, 0) or 0
-            an = round(v / maxf * 100) if v else 0
-            celdas += (f"<td class='num'><div class='bar-fondo'>"
-                       f"<i style='width:{an}%'>&nbsp;{v}</i></div></td>")
-        cols = "".join(
-            f"<div class='col'><b>{v}</b><i style='height:{max(3, round(v / maxd * 95))}px'></i>"
-            f"<span>{di + 1}</span></div>"
-            for di, v in enumerate(x["serie"])
-        )
-        meta_v = vista["sales_meta"] or 0
-        pend_v = max(0, meta_v - x["venta_mes"])
-        vista_pan.append(
-            f"<div class='vista-panel' data-i='{i}' {'hidden' if i else ''}>"
-            f"<p class='nota'><b>Informe del mes {esc(vista['mes'])}</b> &mdash; {esc(x['nombre'])}</p>"
-            f"<div style='overflow-x:auto'><table>"
-            f"<thead><tr><th>Flujo (embudo del mes)</th>{''.join(th_hdr)}</tr></thead>"
-            f"<tbody><tr><td>{esc(x['nombre'])}</td>{celdas}</tr></tbody></table></div>"
-            f"<p class='nota'>Venta mensual: <b>US${x['venta_mes']:,.0f}</b> &middot; "
-            f"Meta: US${meta_v:,.0f} &middot; Pendiente: US${pend_v:,.0f}</p>"
-            f"<p class='nota'>Atenci&oacute;n diaria del mes (creados + atendidos + contacto tienda)</p>"
-            f"<div class='graf-dia'>{cols}</div></div>"
-        )
-    vista_html = (
-        f"<div class='pestanas'>{vista_pest}</div>"
-        f"<div class='panel-vista'>{''.join(vista_pan)}</div>"
-        "<script>"
-        "(function(){var p=document.querySelector('.panel-vista');"
-        "var bts=document.querySelectorAll('.pestanas button');"
-        "bts.forEach(function(b){b.onclick=function(){"
-        "bts.forEach(function(z){z.classList.remove('activa');});"
-        "b.classList.add('activa');"
-        "Array.prototype.forEach.call(p.children,function(pl){"
-        "pl.hidden = String(pl.getAttribute('data-i')) !== b.getAttribute('data-i');});};});})();"
-        "</script>"
-    )
 
     html = f"""<!DOCTYPE html>
 <html lang="es">
@@ -269,68 +407,88 @@ def main():
   <span class="sub">{est}</span> &nbsp;|&nbsp; <span class="sub">actualizado {ahora}</span>
 </header>
 <main>
+  <div class="barra">
+    <label>Desde: <input type="date" id="fecha-desde"></label>
+    <label>Hasta: <input type="date" id="fecha-hasta"></label>
+    <button id="btn-ver" class="btn">Ver rango</button>
+    <span class="sub">Rango del filtro (datos: <b id="rango-datos"></b>). Se aplica a todas las tablas.</span>
+  </div>
+
   <section class="tarjeta">
-    <h2>Clientes atendidos por ejecutivo &#8212; {esc(dia_txt)}</h2>
-    <p class="nota">Columnas: nuevos en CRM, atendidos, actividades de seguimiento, contacto tienda y total del dia.</p>
+    <h2>Clientes atendidos por ejecutivo</h2>
+    <p class="nota">Columnas del rango seleccionado: nuevos en CRM, atendidos, actividades de seguimiento, contacto tienda y total.</p>
     <div style="overflow-x:auto">
       <table>
         <thead><tr>
           <th>Ejecutivo</th><th class="num">Nuevos CRM</th><th class="num">Atendidos</th>
           <th class="num">Actividades</th><th class="num">Contacto Tienda</th><th class="num">Total</th>
         </tr></thead>
-        <tbody>{filas_diarias}</tbody>
+        <tbody id="tbody-daily"></tbody>
       </table>
     </div>
   </section>
 
   <section class="tarjeta">
-    <h2>Embudo de ventas del mes (flujo) &#8212; {esc(mes_txt)}</h2>
-    <p class="nota">Flujo del mes: movimientos de etapa por ejecutivo. Contacto Tienda y Seguimiento whatsapp se suman del seguimiento/registro local.</p>
+    <h2>Embudo de ventas del mes (flujo) &#8212; <span id="funnel-mes"></span></h2>
+    <p class="nota">Flujo del mes del d&iacute;a "Hasta": movimientos de etapa por ejecutivo. Contacto Tienda y Seguimiento whatsapp se suman del seguimiento/registro local.</p>
     <div style="overflow-x:auto">
       <table>
-        <thead>{encabezado_embudo}</thead>
-        <tbody>{filas_embudo}</tbody>
+        <thead id="thead-funnel"></thead>
+        <tbody id="tbody-funnel"></tbody>
       </table>
     </div>
   </section>
 
   <section class="tarjeta">
-    <h2>Gesti&oacute;n diaria (meta vs logrado hoy vs pendiente) &#8212; {esc(dia_txt)}</h2>
-    <p class="nota">{venta_txt}</p>
+    <h2>Gesti&oacute;n (meta del rango vs logrado vs pendiente)</h2>
+    <p class="nota" id="gestion-venta"></p>
     <div style="overflow-x:auto">
       <table>
-        <thead><tr><th>Ejecutivo</th>{''.join(f'<th>{esc(s)}</th>' for s in gs)}</tr>
-          <tr class='total'><th>Meta diaria</th>{''.join(f'<th class="num">{mg[s]}</th>' for s in gs)}</tr></thead>
-        <tbody>{filas_gestion}<tr class='total'><td>Total logrado hoy</td>{tot_log}</tr></tbody>
+        <thead id="thead-gestion"></thead>
+        <tbody id="tbody-gestion"></tbody>
+        <tfoot id="tfoot-gestion"></tfoot>
       </table>
     </div>
   </section>
 
   <section class="tarjeta">
     <h2>Hist&oacute;rico de gesti&oacute;n por ejecutivo</h2>
-    <p class="nota">Barras = gesti&oacute;n del d&iacute;a (prospectados + atendidos + cierres). L&iacute;nea roja = venta del d&iacute;a. Selecciona un ejecutivo para ver su historial.</p>
-    {historico_grafico}
+    <div class="barra">
+      <label>Ejecutivo: <select id="sel-hist"></select></label>
+      <span class="sub">Usa el rango Desde/Hasta general. Barras = gesti&oacute;n del d&iacute;a (azul = prospectados, verde = atendidos, naranja = cierres). L&iacute;nea roja = venta del d&iacute;a.</span>
+    </div>
+    <div id="hist-chart" style="margin-bottom:10px"></div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>D&iacute;a</th><th class="num">Prospectados</th><th class="num">Atendidos</th>
+          <th class="num">Cierres</th><th class="num">Venta del d&iacute;a</th>
+        </tr></thead>
+        <tbody id="tbody-historico"></tbody>
+      </table>
+    </div>
   </section>
 
   <section class="tarjeta">
-    <h2>Cierre del d&iacute;a por ejecutivo &#8212; {esc(dia_txt)}</h2>
-    <p class="nota">{cierre_txt}</p>
-    <p class="nota">Prospectados = nuevos CRM del d&iacute;a; Atendidos = clientes con actividad; Cierres = leads que pasaron a Cierre; Venta del d&iacute;a = monto de esos cierres.</p>
+    <h2>Cierre por ejecutivo (rango)</h2>
+    <p class="nota" id="cierre-nota"></p>
+    <p class="nota">Prospectados = nuevos CRM del rango; Atendidos = clientes con actividad; Cierres = leads que pasaron a Cierre; Venta = monto de esos cierres.</p>
     <div style="overflow-x:auto">
       <table>
         <thead><tr>
           <th>Ejecutivo</th><th class="num">Prospectados</th><th class="num">Atendidos</th>
-          <th class="num">Contacto Tienda</th><th class="num">Cierres</th><th class="num">Venta del d&iacute;a</th>
+          <th class="num">Contacto Tienda</th><th class="num">Cierres</th><th class="num">Venta</th>
         </tr></thead>
-        <tbody>{filas_cierre}</tbody>
+        <tbody id="tbody-cierre"></tbody>
       </table>
     </div>
   </section>
 
   <section class="tarjeta">
     <h2>Vista por ejecutivo (como el PDF del mes)</h2>
-    <p class="nota">La info del informe PDF de cada ejecutivo, directamente en pesta&ntilde;as.</p>
-    {vista_html}
+    <p class="nota">La info del informe PDF de cada ejecutivo, directamente en pesta&ntilde;as (mes del d&iacute;a "Hasta").</p>
+    <div class="pestanas" id="pestanas"></div>
+    <div id="panel-vista"></div>
   </section>
 
   <section class="tarjeta">
@@ -342,11 +500,13 @@ def main():
 
   <div class="foot">Generado automaticamente desde el cache local (solo lectura, sin modificar Odoo).</div>
 </main>
+<script id="data" type="application/json">{json.dumps(data_payload, ensure_ascii=False)}</script>
+<script>{JS}</script>
 </body>
 </html>
 """
     (SITE / "index.html").write_text(html, encoding="utf-8")
-    print(f"Tablero estatico generado en docs/ ({len(daily)} ejecutivos, {len(archivos_pdf)} PDFs)")
+    print(f"Tablero estatico generado en docs/ ({len(dias)} dias, {len(execs)} ejecutivos, {len(archivos_pdf)} PDFs)")
     print("Publica con subir_web.bat (o desde sincronizar.bat / pdf_mensual.bat)")
 
 
