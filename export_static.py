@@ -85,25 +85,45 @@ def main():
             shutil.copy(p, PDFS / p.name)
     archivos_pdf = sorted(host.name for host in PDFS.glob("*.pdf"))
 
-    # ---- historico grafico por ejecutivo (PNG pregenerados) ----
+    # ---- historico grafico por ejecutivo (PNG pregenerados, con rangos) ----
     IMG = SITE / "img"
     IMG.mkdir(exist_ok=True)
+    for viejo in IMG.glob("*.png"):
+        if not (viejo.name.endswith("_todo.png") or viejo.name.endswith("_7.png")
+                or viejo.name.endswith("_15.png") or viejo.name.endswith("_30.png")):
+            viejo.unlink()
     import graficos
-    opts = []
-    shafts = []
-    for i, x in enumerate([{"nombre": "GLOBAL"}] + historico["ejecutivos"]):
+    from datetime import timedelta
+    dias_hist = historico["dias"]
+    rangos = [("todo", None, "Todo"), ("30", dias_hist[-30] if len(dias_hist) > 30 else None, "Últimos 30"),
+              ("15", dias_hist[-15] if len(dias_hist) > 15 else None, "Últimos 15"),
+              ("7", dias_hist[-7] if len(dias_hist) > 7 else None, "Últimos 7")]
+    for x in [{"nombre": "GLOBAL"}] + historico["ejecutivos"]:
         nom = x["nombre"]
-        archivo = "hist_" + ("global" if nom == "GLOBAL" else store.normalize(nom).replace(" ", "_")) + ".png"
-        (IMG / archivo).write_bytes(graficos.grafico_historico(historico, nom))
-        sel = " selected" if nom == "GLOBAL" else ""
-        opts.append(f"<option value='{archivo}'{sel}>{esc(nom)}</option>")
+        base = "global" if nom == "GLOBAL" else store.normalize(nom).replace(" ", "_")
+        for tag, desde, _lbl in rangos:
+            archivo = f"hist_{base}_{tag}.png"
+            (IMG / archivo).write_bytes(graficos.grafico_historico(historico, nom, desde))
+
+    def _opciones(noms, id_base, activo_id):
+        return "".join(f"<option value='{esc(v)}'{(' selected' if v == activo_id else '')}>{esc(l)}</option>"
+                       for v, l in noms)
+
+    ops_exec = [("global", "GLOBAL")] + [(store.normalize(e["nombre"]).replace(" ", "_"), e["nombre"])
+                                         for e in historico["ejecutivos"]]
+    ops_rng = [(t, l) for t, _d, l in rangos]
+    seleccion = "hist_" + (ops_exec[0][0]) + "_todo.png"
     historico_grafico = (
         "<div class='barra' style='margin-bottom:10px'>"
-        f"<label>Ejecutivo: <select id='sel-hist'>{''.join(opts)}</select></label></div>"
-        f"<img id='img-hist' src='img/hist_global.png' style='max-width:100%;border:1px solid var(--borde);border-radius:8px'>"
+        "<label>Ejecutivo: <select id='sel-hist'>"
+        + _opciones(ops_exec, "sel-hist", ops_exec[0][0]) + "</select></label>"
+        "<label>Rango: <select id='sel-hist-rng'>"
+        + _opciones(ops_rng, "sel-hist-rng", "todo") + "</select></label></div>"
+        f"<img id='img-hist' src='img/{seleccion}' style='max-width:100%;border:1px solid var(--borde);border-radius:8px'>"
         "<script>"
-        "(function(){var s=document.getElementById('sel-hist'),im=document.getElementById('img-hist');"
-        "s.onchange=function(){im.src='img/'+s.value;};})();"
+        "(function(){var e=document.getElementById('sel-hist'),r=document.getElementById('sel-hist-rng'),im=document.getElementById('img-hist');"
+        "function act(){im.src='img/hist_'+e.value+'_'+r.value+'.png';}"
+        "e.onchange=act;r.onchange=act;})();"
         "</script>"
     )
 

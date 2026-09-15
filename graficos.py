@@ -27,8 +27,12 @@ def _serie(historico, nombre_seleccion, dias):
     return {ds: (historico["rend"].get(ds, {}) or {}).get(str(e["uid"]), {}) for ds in dias}
 
 
-def grafico_historico(historico, nombre_seleccion="GLOBAL"):
+def grafico_historico(historico, nombre_seleccion="GLOBAL", desde=None, hasta=None):
     dias = historico["dias"]
+    if desde:
+        dias = [d for d in dias if d >= desde]
+    if hasta:
+        dias = [d for d in dias if d <= hasta]
     serie = _serie(historico, nombre_seleccion, dias)
     fechas = [date.fromisoformat(d) for d in dias]
 

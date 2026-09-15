@@ -344,11 +344,20 @@ def api_store_contact():
 @app.route("/api/grafico")
 def api_grafico():
     nombre = request.args.get("ejecutivo", "GLOBAL")
+    desde = request.args.get("desde") or None
+    hasta = request.args.get("hasta") or None
     hist = build_historico()
     series = [h["nombre"] for h in hist["ejecutivos"]]
     if nombre not in series:
         nombre = "GLOBAL"
-    png = graficos.grafico_historico(hist, nombre)
+    for arg in (desde, hasta):
+        if arg:
+            try:
+                date.fromisoformat(arg)
+            except ValueError:
+                desde = hasta = None
+                break
+    png = graficos.grafico_historico(hist, nombre, desde, hasta)
     return Response(png, mimetype="image/png")
 
 

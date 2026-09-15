@@ -39,7 +39,7 @@ a.pdf { display:inline-block; margin:0 6px 8px 0; padding:6px 12px; border:1px s
 <body>
 <header>
   <h1>Embudo de Ventas &#8226; Latinbien</h1>
-  <span class="sub">&uacute;ltima sincronizaci&oacute;n: 2026-09-14 16:44:26</span> &nbsp;|&nbsp; <span class="sub">actualizado 2026-09-15 11:42</span>
+  <span class="sub">&uacute;ltima sincronizaci&oacute;n: 2026-09-14 16:44:26</span> &nbsp;|&nbsp; <span class="sub">actualizado 2026-09-15 11:48</span>
 </header>
 <main>
   <section class="tarjeta">
@@ -82,7 +82,7 @@ a.pdf { display:inline-block; margin:0 6px 8px 0; padding:6px 12px; border:1px s
   <section class="tarjeta">
     <h2>Hist&oacute;rico de gesti&oacute;n por ejecutivo</h2>
     <p class="nota">Barras = gesti&oacute;n del d&iacute;a (prospectados + atendidos + cierres). L&iacute;nea roja = venta del d&iacute;a. Selecciona un ejecutivo para ver su historial.</p>
-    <div class='barra' style='margin-bottom:10px'><label>Ejecutivo: <select id='sel-hist'><option value='hist_global.png' selected>GLOBAL</option><option value='hist_claudia_milena_zapata.png'>CLAUDIA MILENA ZAPATA</option><option value='hist_daniel_castellanos.png'>DANIEL CASTELLANOS</option><option value='hist_elio_chamate.png'>ELIO CHAMATE</option><option value='hist_gabriel_alejandro_parra_molina.png'>GABRIEL ALEJANDRO PARRA MOLINA</option><option value='hist_lady_diana_toro_rivera.png'>LADY DIANA TORO RIVERA</option><option value='hist_luis_andres_de_jesus_rojas_rodriguez.png'>LUIS ANDRES DE JESUS ROJAS RODRIGUEZ</option><option value='hist_maria_alejandra_rodriguez_sojo.png'>MARIA ALEJANDRA RODRIGUEZ SOJO</option><option value='hist_marsolaire_angulo_rangel.png'>MARSOLAIRE ANGULO RANGEL </option><option value='hist_yohana_audrey_lopez.png'>YOHANA AUDREY LOPEZ</option></select></label></div><img id='img-hist' src='img/hist_global.png' style='max-width:100%;border:1px solid var(--borde);border-radius:8px'><script>(function(){var s=document.getElementById('sel-hist'),im=document.getElementById('img-hist');s.onchange=function(){im.src='img/'+s.value;};})();</script>
+    <div class='barra' style='margin-bottom:10px'><label>Ejecutivo: <select id='sel-hist'><option value='global' selected>GLOBAL</option><option value='claudia_milena_zapata'>CLAUDIA MILENA ZAPATA</option><option value='daniel_castellanos'>DANIEL CASTELLANOS</option><option value='elio_chamate'>ELIO CHAMATE</option><option value='gabriel_alejandro_parra_molina'>GABRIEL ALEJANDRO PARRA MOLINA</option><option value='lady_diana_toro_rivera'>LADY DIANA TORO RIVERA</option><option value='luis_andres_de_jesus_rojas_rodriguez'>LUIS ANDRES DE JESUS ROJAS RODRIGUEZ</option><option value='maria_alejandra_rodriguez_sojo'>MARIA ALEJANDRA RODRIGUEZ SOJO</option><option value='marsolaire_angulo_rangel'>MARSOLAIRE ANGULO RANGEL </option><option value='yohana_audrey_lopez'>YOHANA AUDREY LOPEZ</option></select></label><label>Rango: <select id='sel-hist-rng'><option value='todo' selected>Todo</option><option value='30'>Últimos 30</option><option value='15'>Últimos 15</option><option value='7'>Últimos 7</option></select></label></div><img id='img-hist' src='img/hist_global_todo.png' style='max-width:100%;border:1px solid var(--borde);border-radius:8px'><script>(function(){var e=document.getElementById('sel-hist'),r=document.getElementById('sel-hist-rng'),im=document.getElementById('img-hist');function act(){im.src='img/hist_'+e.value+'_'+r.value+'.png';}e.onchange=act;r.onchange=act;})();</script>
   </section>
 
   <section class="tarjeta">
