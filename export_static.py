@@ -68,10 +68,10 @@ def main():
     dia = date.fromisoformat(last[:10])
     month_start = dia.replace(day=1)
 
-    daily, daily_total = dashboard_app.build_daily_panel(dia)
+    daily, daily_total = dashboard_app.build_daily_panel(dia, dia)
     header, funnel, funnel_total = dashboard_app.build_funnel(dia)
-    gestion = dashboard_app.build_gestion(dia)
-    cierre = dashboard_app.build_cierre(dia)
+    gestion = dashboard_app.build_gestion(dia, dia)
+    cierre = dashboard_app.build_cierre(dia, dia)
     historico = dashboard_app.build_historico()
     last_sync = store.last_sync_ok(dashboard_app.cfg["sqlite_path"])
     ahora = datetime.now().strftime("%Y-%m-%d %H:%M")

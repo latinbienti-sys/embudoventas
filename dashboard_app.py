@@ -43,19 +43,24 @@ def _active_execs():
     return execs
 
 
-def build_daily_panel(day: date):
-    """Tabla diaria por ejecutivo."""
+def build_daily_panel(start: date, end: date):
+    """Tabla diaria por ejecutivo (acumulada en el rango)."""
     execs = _active_execs()
-    touched = {r["odoo_uid"]: r["count"] for r in
-               store.get_touched_daily_range(cfg["sqlite_path"], day, day)}
-    created = {r["odoo_uid"]: r["count"] for r in
-               store.get_created_daily_range(cfg["sqlite_path"], day, day)}
-    boton = {r["odoo_uid"]: r["count"] for r in
-             store.get_store_contacts_range(cfg["sqlite_path"], day, day)}
-    puerta = {r["odoo_uid"]: r["count"] for r in
-              store.get_puerta_daily_range(cfg["sqlite_path"], day, day)}
-    actividades = {r["odoo_uid"]: r["count"] for r in
-                   store.get_activities_daily_range(cfg["sqlite_path"], day, day)}
+    touched = {}
+    for r in store.get_touched_daily_range(cfg["sqlite_path"], start, end):
+        touched[r["odoo_uid"]] = touched.get(r["odoo_uid"], 0) + r["count"]
+    created = {}
+    for r in store.get_created_daily_range(cfg["sqlite_path"], start, end):
+        created[r["odoo_uid"]] = created.get(r["odoo_uid"], 0) + r["count"]
+    boton = {}
+    for r in store.get_store_contacts_range(cfg["sqlite_path"], start, end):
+        boton[r["odoo_uid"]] = boton.get(r["odoo_uid"], 0) + r["count"]
+    puerta = {}
+    for r in store.get_puerta_daily_range(cfg["sqlite_path"], start, end):
+        puerta[r["odoo_uid"]] = puerta.get(r["odoo_uid"], 0) + r["count"]
+    actividades = {}
+    for r in store.get_activities_daily_range(cfg["sqlite_path"], start, end):
+        actividades[r["odoo_uid"]] = actividades.get(r["odoo_uid"], 0) + r["count"]
 
     rows = []
     total = {"creados": 0, "atendidos": 0, "tienda": 0, "actividades": 0, "total": 0}
@@ -112,15 +117,17 @@ def build_funnel(day: date):
     return header, rows, totals
 
 
-def build_gestion(day: date):
-    """Gestion diaria: meta vs logrado (flujo de HOY) vs pendiente por ejecutivo."""
+def build_gestion(start: date, end: date):
+    """Gestion del rango: meta (escalada) vs logrado vs pendiente por ejecutivo."""
     execs = _active_execs()
     stages = cfg.get("funnel_stages", [])
-    meta = cfg.get("daily_meta", {}) or {st: 0 for st in stages}
-    daily = {r["uid"]: r for r in build_daily_panel(day)[0]}
-    moves_hoy = {}
-    for r in store.get_stage_moves_range(cfg["sqlite_path"], day, day):
-        moves_hoy.setdefault(r["odoo_uid"], {})[r["stage"]] = r["count"]
+    meta_base = cfg.get("daily_meta", {}) or {st: 0 for st in stages}
+    num_dias = (end - start).days + 1
+    m = {st: int(meta_base.get(st, 0)) * num_dias for st in stages}
+    daily = {r["uid"]: r for r in build_daily_panel(start, end)[0]}
+    moves_range = {}
+    for r in store.get_stage_moves_range(cfg["sqlite_path"], start, end):
+        moves_range.setdefault(r["odoo_uid"], {})[r["stage"]] = r["count"]
 
     rows = []
     totals = {st: {"meta": 0, "logrado": 0, "pendiente": 0} for st in stages}
@@ -133,9 +140,8 @@ def build_gestion(day: date):
             elif st == "Seguimiento whatsapp Corporativo":
                 v = dr["actividades"] if dr else 0
             else:
-                v = (moves_hoy.get(e["odoo_uid"], {}) or {}).get(st, 0)
+                v = (moves_range.get(e["odoo_uid"], {}) or {}).get(st, 0)
             logrado[st] = v or 0
-        m = {st: int(meta.get(st, 0)) for st in stages}
         pend = {st: max(0, m[st] - logrado[st]) for st in stages}
         ok = {st: logrado[st] >= m[st] for st in stages}
         rows.append({"nombre": e["name"], "uid": e["odoo_uid"], "meta": m,
@@ -145,7 +151,7 @@ def build_gestion(day: date):
             totals[st]["logrado"] += logrado[st]
             totals[st]["pendiente"] += pend[st]
 
-    ventas_uid, venta_mes = store.get_ventas_month(cfg["sqlite_path"], day.year, day.month)
+    ventas_uid, venta_mes = store.get_ventas_month(cfg["sqlite_path"], start.year, start.month)
     meta_venta = cfg.get("sales_meta", 0) or 0
     return {
         "stages": stages,
@@ -156,16 +162,16 @@ def build_gestion(day: date):
     }
 
 
-def build_cierre(day: date):
-    """Cierre de la jornada por ejecutivo: prospectados, atendidos, cierres y venta del dia."""
+def build_cierre(start: date, end: date):
+    """Cierre del rango por ejecutivo: prospectados, atendidos, cierres y venta."""
     execs = _active_execs()
-    daily = {r["uid"]: r for r in build_daily_panel(day)[0]}
-    moves_hoy = {}
-    for r in store.get_stage_moves_range(cfg["sqlite_path"], day, day):
-        moves_hoy.setdefault(r["odoo_uid"], {})[r["stage"]] = r["count"]
-    venta_dia = {}
-    for r in store.get_ventas_daily_range(cfg["sqlite_path"], day, day):
-        venta_dia[r["odoo_uid"]] = venta_dia.get(r["odoo_uid"], 0) + r["amount"]
+    daily = {r["uid"]: r for r in build_daily_panel(start, end)[0]}
+    moves_range = {}
+    for r in store.get_stage_moves_range(cfg["sqlite_path"], start, end):
+        moves_range.setdefault(r["odoo_uid"], {})[r["stage"]] = r["count"]
+    venta_range = {}
+    for r in store.get_ventas_daily_range(cfg["sqlite_path"], start, end):
+        venta_range[r["odoo_uid"]] = venta_range.get(r["odoo_uid"], 0) + r["amount"]
     stages = cfg.get("funnel_stages", [])
     etiqueta_cierre = None
     for s in stages:
@@ -177,8 +183,8 @@ def build_cierre(day: date):
     tot = {"prospect": 0, "atendidos": 0, "tienda": 0, "cierres": 0, "venta": 0.0}
     for e in execs:
         dr = daily.get(e["odoo_uid"])
-        cierres = (moves_hoy.get(e["odoo_uid"], {}) or {}).get(etiqueta_cierre, 0) if etiqueta_cierre else 0
-        venta = venta_dia.get(e["odoo_uid"], 0) or 0
+        cierres = (moves_range.get(e["odoo_uid"], {}) or {}).get(etiqueta_cierre, 0) if etiqueta_cierre else 0
+        venta = venta_range.get(e["odoo_uid"], 0) or 0
         row = {
             "nombre": e["name"],
             "uid": e["odoo_uid"],
@@ -207,7 +213,7 @@ def build_historico():
     totales = {}
     for ds in dias:
         d = date.fromisoformat(ds)
-        c = build_cierre(d)
+        c = build_cierre(d, d)
         por_uid = {r["uid"]: r for r in c["rows"]}
         rend[ds] = {str(e["uid"]): por_uid.get(e["uid"], {
             "nombre": e["nombre"], "prospect": 0, "atendidos": 0,
@@ -300,24 +306,31 @@ def index():
 
 @app.route("/api/data", methods=["GET"])
 def api_data():
-    day = date.today()
-    d = request.args.get("day")
-    if d:
-        try:
-            day = date.fromisoformat(d)
-        except ValueError:
-            day = date.today()
-    daily, daily_total = build_daily_panel(day)
+    desde = request.args.get("from")
+    hasta = request.args.get("to")
+    try:
+        day_desde = date.fromisoformat(desde) if desde else date.today()
+    except ValueError:
+        day_desde = date.today()
+    try:
+        day_hasta = date.fromisoformat(hasta) if hasta else date.today()
+    except ValueError:
+        day_hasta = date.today()
+    if day_desde > day_hasta:
+        day_desde = day_hasta
+    day = day_hasta  # dia de referencia para embudo del mes y vista
+    daily, daily_total = build_daily_panel(day_desde, day_hasta)
     header, funnel_rows, funnel_total = build_funnel(day)
-    gestion = build_gestion(day)
+    gestion = build_gestion(day_desde, day_hasta)
     vista = build_vista(day)
-    cierre = build_cierre(day)
+    cierre = build_cierre(day_desde, day_hasta)
     historico = build_historico()
     if not store.last_snapshot_date(cfg["sqlite_path"]):
         funnel_rows = []
     last_sync = store.last_sync_ok(cfg["sqlite_path"])
     return jsonify({
-        "dia": day.isoformat(),
+        "dia_desde": day_desde.isoformat(),
+        "dia_hasta": day_hasta.isoformat(),
         "daily": daily,
         "daily_total": daily_total,
         "funnel_header": header,

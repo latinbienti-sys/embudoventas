@@ -57,12 +57,13 @@
 
 <main>
   <div class="barra">
-    <label>Fecha:
-      <input type="date" id="dia">
+    <label>Desde:
+      <input type="date" id="fecha-desde">
     </label>
-    <button id="btn-ante" class="b">&larr; anterior</button>
-    <button id="btn-sig" class="b">siguiente &rarr;</button>
-    <button id="btn-ver" class="btn">Ver d&iacute;a</button>
+    <label>Hasta:
+      <input type="date" id="fecha-hasta">
+    </label>
+    <button id="btn-ver" class="btn">Ver rango</button>
     <span style="flex:1"></span>
     <label>PDF mensual:
       <input type="month" id="mes">
@@ -119,14 +120,7 @@
       <label>Ejecutivo:
         <select id="sel-ejecutivo"></select>
       </label>
-      <label>Desde:
-        <input type="date" id="hist-desde">
-      </label>
-      <label>Hasta:
-        <input type="date" id="hist-hasta">
-      </label>
-      <button id="btn-hist-filtrar" class="b">Filtrar</button>
-      <span class="sub">Barras = gesti&oacute;n del d&iacute;a (prospectados + atendidos + cierres). L&iacute;nea roja = venta del d&iacute;a.</span>
+      <span class="sub">Usa el rango de fechas general (Desde/Hasta del tablero). Barras = gesti&oacute;n del d&iacute;a. L&iacute;nea roja = venta del d&iacute;a.</span>
     </div>
     <img id="img-historico" alt="Grafico historico" style="max-width:100%;border:1px solid var(--borde);border-radius:8px">
     <div style="overflow-x:auto">
@@ -167,16 +161,21 @@
 </main>
 
 <script>
-async function carga(day) {
-  const r = await fetch("/api/data?day=" + day);
+let diasGlobal = [];
+
+async function carga() {
+  const desde = document.getElementById("fecha-desde").value;
+  const hasta = document.getElementById("fecha-hasta").value;
+  const r = await fetch("/api/data?from=" + desde + "&to=" + hasta);
   const d = await r.json();
+  diasGlobal = (d.historico || {}).dias || [];
 
   const es = document.getElementById("estado-sync");
   if (d.last_sync) es.innerHTML = '<span class="pill ' + (d.last_sync.ok ? "ok" : "no") +
     '">\u00daltima sincronizaci\u00f3n: ' + d.last_sync.run_at + '</span>';
   else es.textContent = "Sin sincronizaci\u00f3n a\u00fan";
 
-  // panel diario
+  // panel diario (acumulado del rango)
   const tb = document.getElementById("tbody-daily");
   tb.innerHTML = d.daily.map(x => `
     <tr>
@@ -197,7 +196,7 @@ async function carga(day) {
     `<tr class="total"><td>Total</td><td class="num">${t.creados}</td><td class="num">${t.atendidos}</td>
      <td class="num">${t.actividades}</td><td class="num">${t.tienda}</td><td class="num">${t.total}</td></tr>`);
 
-  // embudo
+  // embudo (mes del dia hasta)
   const th = document.getElementById("thead-funnel");
   th.innerHTML = "<tr>" + d.funnel_header.map(h => "<th>" + h + "</th>").join("") + "</tr>";
   const tbf = document.getElementById("tbody-funnel");
@@ -218,15 +217,13 @@ async function carga(day) {
 
   document.getElementById("aviso-embudo").hidden = d.funnel_rows.length > 0;
 
-  // gestion diaria
+  // gestion (meta del rango vs logrado vs pendiente)
   const g = d.gestion || {};
   const thg = document.getElementById("thead-gestion");
-  const metas = {};
-  (g.stages || []).forEach(s => { metas[s] = (g.totals[s] || {}).meta || 0; });
   thg.innerHTML = "<tr><th>Ejecutivo</th>" +
     (g.stages || []).map(s => `<th>${s}</th>`).join("") + "</tr>" +
-    "<tr class='total'><th>Meta diaria</th>" +
-    (g.stages || []).map(s => `<th class="num">${metas[s]}</th>`).join("") + "</tr>";
+    "<tr class='total'><th>Meta del rango</th>" +
+    (g.stages || []).map(s => `<th class="num">${(g.totals[s] || {}).meta || 0}</th>`).join("") + "</tr>";
   const tbg = document.getElementById("tbody-gestion");
   tbg.innerHTML = (g.rows || []).map(x => {
     const cels = (g.stages || []).map(s => {
@@ -238,7 +235,7 @@ async function carga(day) {
   }).join("");
   const tfg = document.getElementById("tfoot-gestion");
   if ((g.rows || []).length) {
-    tfg.innerHTML = "<tr class='total'><td>Total logrado hoy</td>" +
+    tfg.innerHTML = "<tr class='total'><td>Total logrado</td>" +
       (g.stages || []).map(s => `<td class="num">${(g.totals[s]||{}).logrado || 0}</td>`).join("") + "</tr>";
   }
   const v = g.ventas || {};
@@ -247,7 +244,7 @@ async function carga(day) {
     `&middot; Meta: US$${Number(v.meta||0).toLocaleString("en-US")} ` +
     `&middot; Pendiente: US$${Number(v.pendiente||0).toLocaleString("en-US")}`;
 
-  // cierre del dia
+  // cierre del rango
   const c = d.cierre || {rows: [], total: null};
   const tbc = document.getElementById("tbody-cierre");
   tbc.innerHTML = c.rows.map(x => `
@@ -266,47 +263,42 @@ async function carga(day) {
        <td class="num">US$${Number(c.total.venta).toLocaleString("en-US", {maximumFractionDigits:2})}</td></tr>`);
   }
   document.getElementById("cierre-nota").innerHTML =
-    `Resultado de la jornada del <b>${d.dia}</b>: prospectaron <b>${c.total ? c.total.prospect : 0}</b>, ` +
+    `Resultado del <b>${d.dia_desde}</b> al <b>${d.dia_hasta}</b>: prospectaron <b>${c.total ? c.total.prospect : 0}</b>, ` +
     `atendieron <b>${c.total ? c.total.atendidos : 0}</b>, cerraron <b>${c.total ? c.total.cierres : 0}</b>.`;
 
   // estado whatsapp
   const wn = document.getElementById("wa-nota");
   wn.innerHTML = "{{ 'Envio por GoHighLevel configurado.' if tiene_ghl else 'WhatsApp NO configurado aun: rellena gohighlevel.api_key en config.json (funciona el modo enlace manual).' }}";
 
-// historico por ejecutivo (grafico + tabla)
+  // historico por ejecutivo: usa el RANGO GLOBAL (mismo desde/hasta) + filtro ejecutivo
   const h = d.historico || {dias: [], ejecutivos: [], rend: {}, totales: {}};
-  window.__dias = h.dias;
   const sel = document.getElementById("sel-ejecutivo");
   sel.innerHTML = '<option value="GLOBAL">GLOBAL</option>' +
     h.ejecutivos.map(e => '<option value="' + e.nombre + '">' + e.nombre + '</option>').join("");
+  sel.dataset.done = "1";
   const img = document.getElementById("img-historico");
-  const df = document.getElementById("hist-desde"), dh = document.getElementById("hist-hasta");
-  df.min = df.value = h.dias[0] || "";
-  dh.max = dh.value = h.dias[h.dias.length - 1] || "";
   const pintar = () => {
     const nom = sel.value;
-    const desde = df.value || "", hasta = dh.value || "";
     img.src = "/api/grafico?ejecutivo=" + encodeURIComponent(nom) +
-              (desde ? "&desde=" + desde : "") + (hasta ? "&hasta=" + hasta : "");
-    const tbc = document.getElementById("tbody-historico");
-    const seria = h.dias
-      .filter(ds => (!desde || ds >= desde) && (!hasta || ds <= hasta))
-      .map(ds => {
-      const r = nom === "GLOBAL"
+              "&desde=" + desde + "&hasta=" + hasta;
+    const rango = h.dias.filter(ds => ds >= desde && ds <= hasta);
+    const tbh = document.getElementById("tbody-historico");
+    const seria = rango.map(ds => {
+      const rr = nom === "GLOBAL"
         ? (h.totales[ds] || {})
         : (h.rend[ds] || {})[String((h.ejecutivos.find(e => e.nombre === nom) || {}).uid)];
-      return {ds, r: r || {}};
+      return {ds, r: rr || {}};
     });
-    tbc.innerHTML = seria.map(({ds, r}) =>
+    tbh.innerHTML = seria.map(({ds, r}) =>
       `<tr><td>${ds}</td><td class="num">${r.prospect||0}</td><td class="num">${r.atendidos||0}</td>` +
       `<td class="num">${r.cierres||0}</td><td class="num">${Number(r.venta||0).toFixed(2)}</td></tr>`).join("");
     const s = {prospect: 0, atendidos: 0, cierres: 0, venta: 0};
     seria.forEach(({r}) => { s.prospect += r.prospect||0; s.atendidos += r.atendidos||0; s.cierres += r.cierres||0; s.venta += r.venta||0; });
-    tbc.insertAdjacentHTML("beforeend",
+    tbh.insertAdjacentHTML("beforeend",
       `<tr class="total"><td>Total</td><td class="num">${s.prospect}</td><td class="num">${s.atendidos}</td>` +
       `<td class="num">${s.cierres}</td><td class="num">${Number(s.venta).toFixed(2)}</td></tr>`);
   };
-  sel.onchange = pintar;
+  if (sel.dataset.done === "1") sel.onchange = pintar;
   pintar();
 
   // PDFs del mes
@@ -318,7 +310,7 @@ async function carga(day) {
     l.innerHTML = nom ? nom.join(" ") : `<span class="nota">Aun no hay PDFs para ${j.mes}. Usa pdf_mensual.bat.</span>`;
   }).catch(() => {});
 
-  // vista por ejecutivo (info como el PDF, en pestanas)
+  // vista por ejecutivo (info del mes, pestanas)
   const V = d.vista;
   if (V) renderVista(V);
 }
@@ -353,8 +345,8 @@ function vistaHTML(x, V, i) {
   }).join("");
   const maxD = Math.max(1, ...x.serie);
   const cols = x.serie.map((v, di) => {
-    const h = Math.max(3, Math.round(v / maxD * 95));
-    return `<div class="col"><b>${v}</b><i style="height:${h}px"></i><span>${di + 1}</span></div>`;
+    const hh = Math.max(3, Math.round(v / maxD * 95));
+    return `<div class="col"><b>${v}</b><i style="height:${hh}px"></i><span>${di + 1}</span></div>`;
   }).join("");
   const metaV = Number(V.sales_meta || 0);
   const venta = Number(x.venta_mes || 0);
@@ -373,45 +365,33 @@ function vistaHTML(x, V, i) {
     <div class="graf-dia">${cols}</div>
   </div>`;
 }
-}
 
-async function btnTienda(uid, delta, day) {
+async function btnTienda(uid, delta) {
   const r = await fetch("/api/store_contact", {
     method: "POST", headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({day, odoo_uid: uid, delta})
+    body: JSON.stringify({day: document.getElementById("fecha-hasta").value, odoo_uid: uid, delta})
   });
   const j = await r.json();
   document.getElementById("ct-" + j.odoo_uid).textContent = j.count;
-  carga(day);
+  carga();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   const hoy = new Date().toISOString().slice(0, 10);
-  document.getElementById("dia").value = hoy;
+  const fd = document.getElementById("fecha-desde"), fh = document.getElementById("fecha-hasta");
+  fd.value = fh.value = hoy;
   document.getElementById("mes").value = hoy.slice(0, 7);
-  carga(hoy);
+  carga();
 
-  document.getElementById("btn-ver").onclick = () => carga(document.getElementById("dia").value);
-  document.getElementById("dia").onchange = () => carga(document.getElementById("dia").value);
-
-  document.getElementById("btn-ante").onclick = () => {
-    const dias = window.__dias || [];
-    const cur = document.getElementById("dia").value;
-    const i = dias.indexOf(cur);
-    if (i > 0) { document.getElementById("dia").value = dias[i - 1]; carga(dias[i - 1]); }
-  };
-  document.getElementById("btn-sig").onclick = () => {
-    const dias = window.__dias || [];
-    const cur = document.getElementById("dia").value;
-    const i = dias.indexOf(cur);
-    if (i >= 0 && i < dias.length - 1) { document.getElementById("dia").value = dias[i + 1]; carga(dias[i + 1]); }
-  };
+  document.getElementById("btn-ver").onclick = () => carga();
+  fd.onchange = () => { if (fd.value > fh.value) fh.value = fd.value; carga(); };
+  fh.onchange = () => { if (fh.value < fd.value) fd.value = fh.value; carga(); };
 
   document.getElementById("tbody-daily").addEventListener("click", e => {
     const btn = e.target.closest("button[data-u]");
     if (!btn) return;
     const delta = parseInt(btn.dataset.d || btn.dataset.del, 10);
-    btnTienda(parseInt(btn.dataset.u, 10), delta, document.getElementById("dia").value);
+    btnTienda(parseInt(btn.dataset.u, 10), delta);
   });
 
   document.getElementById("btn-pdf").onclick = () => {
@@ -425,7 +405,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const r = await fetch("/api/gestion_enviar", {
         method: "POST", headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({day: document.getElementById("dia").value})
+        body: JSON.stringify({day: document.getElementById("fecha-hasta").value})
       });
       const j = await r.json();
       alert(j.ok ? "Cierre enviado por WhatsApp." : ("Error: " + (j.error || r.status)));
