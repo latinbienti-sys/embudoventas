@@ -180,6 +180,7 @@ def build_cierre(day: date):
         venta = venta_dia.get(e["odoo_uid"], 0) or 0
         row = {
             "nombre": e["name"],
+            "uid": e["odoo_uid"],
             "prospect": (dr["creados"] if dr else 0),
             "atendidos": (dr["atendidos"] if dr else 0),
             "tienda": (dr["tienda"] if dr else 0),
@@ -269,7 +270,12 @@ def build_vista(day: date):
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template(
+        "index.html",
+        refresh_min=cfg.get("refresh_min", 60),
+        hora_envio=cfg.get("hora_envio_gestion", "20:00"),
+        tiene_ghl=bool(cfg.get("gohighlevel", {}).get("api_key")),
+    )
 
 
 @app.route("/api/data", methods=["GET"])
@@ -311,6 +317,30 @@ def api_store_contact():
     delta = int(body.get("delta", 1))
     new_count = store.increment_store_contact(cfg["sqlite_path"], day, uid, delta)
     return jsonify({"ok": True, "odoo_uid": uid, "count": new_count})
+
+
+@app.route("/api/gestion_enviar", methods=["POST"])
+def api_gestion_enviar():
+    body = request.get_json(silent=True) or {}
+    d = date.fromisoformat(body["day"]) if body.get("day") else date.today()
+    if not cfg.get("gohighlevel", {}).get("api_key"):
+        return jsonify({"ok": False,
+                        "error": "GoHighLevel NO configurado: rellena gohighlevel.api_key en config.json"}), 400
+    try:
+        import gohighlevel
+        resumen, por_ejec = gohighlevel.build_mensajes(d)
+        enviados = 0
+        for tel in cfg.get("gerencia_whatsapp", []):
+            if tel:
+                gohighlevel.enviar_whatsapp(resumen, tel)
+                enviados += 1
+        for nombre_norm, tel in cfg.get("ejecutivos_whatsapp", {}).items():
+            if tel and nombre_norm in por_ejec:
+                gohighlevel.enviar_whatsapp(por_ejec[nombre_norm], tel)
+                enviados += 1
+        return jsonify({"ok": True, "day": d.isoformat(), "enviados": enviados})
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/api/pdf", methods=["GET"])

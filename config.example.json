@@ -42,5 +42,22 @@
     "PROYECTO ERP"
   ],
   "sqlite_path": "crm_cache.db",
-  "pdf_output_dir": "pdf_reports"
+  "pdf_output_dir": "pdf_reports",
+  "gohighlevel": {
+    "api_key": "TU_API_KEY_GOHIGHLEVEL",
+    "api_base": "https://services.leadconnectorhq.com",
+    "version": "2021-07-28",
+    "location_id": "TU_LOCATION_ID"
+  },
+  "gerencia_whatsapp": [
+    "573001234567",
+    "573009876543"
+  ],
+  "ejecutivos_whatsapp": {
+    "claudia milena zapata": "573001111111",
+    "gabriel alejandro parra molina": "573002222222"
+  },
+  "hora_envio_gestion": "20:00",
+  "sync_cadencia_horas": 1,
+  "refresh_min": 60
 }

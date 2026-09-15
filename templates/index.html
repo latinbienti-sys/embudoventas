@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+{% if refresh_min %}<meta http-equiv="refresh" content="{{ refresh_min * 60 }}">{% endif %}
 <title>Embudo de Ventas - Latinbien</title>
 <style>
   :root { --azul:#0f3b6e; --verde:#1e8e5a; --naranja:#e07b2a; --gris:#eef1f5; --borde:#d3dae3; }
@@ -113,6 +114,7 @@
   <section class="tarjeta">
     <h2>Cierre del d&iacute;a por ejecutivo</h2>
     <p class="nota" id="cierre-nota"></p>
+    <p class="nota" id="wa-nota"></p>
     <div style="overflow-x:auto">
       <table>
         <thead><tr>
@@ -122,6 +124,10 @@
         <tbody id="tbody-cierre"></tbody>
       </table>
     </div>
+    <p style="margin-top:12px">
+      <button id="btn-wa" class="btn">Enviar cierre por WhatsApp</button>
+      <span class="sub">&nbsp;Env&iacute;o autom&aacute;tico configurado a las {{ hora_envio }} a gerencia y ejecutivos (GoHighLevel).</span>
+    </p>
   </section>
 
   <section class="tarjeta">
@@ -234,6 +240,10 @@ async function carga(day) {
     `Resultado de la jornada del <b>${d.dia}</b>: prospectaron <b>${c.total ? c.total.prospect : 0}</b>, ` +
     `atendieron <b>${c.total ? c.total.atendidos : 0}</b>, cerraron <b>${c.total ? c.total.cierres : 0}</b>.`;
 
+  // estado whatsapp
+  const wn = document.getElementById("wa-nota");
+  wn.innerHTML = "{{ 'Envio por GoHighLevel configurado.' if tiene_ghl else 'WhatsApp NO configurado aun: rellena gohighlevel.api_key en config.json (funciona el modo enlace manual).' }}";
+
   // PDFs del mes
   const mes = document.getElementById("mes").value;
   fetch("/api/pdfs?month=" + mes).then(r => r.json()).then(j => {
@@ -329,6 +339,20 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btn-pdf").onclick = () => {
     const mes = document.getElementById("mes").value;
     window.open("/api/pdf?month=" + mes, "_blank");
+  };
+
+  document.getElementById("btn-wa").onclick = async () => {
+    const btn = document.getElementById("btn-wa");
+    btn.disabled = true; btn.textContent = "Enviando...";
+    try {
+      const r = await fetch("/api/gestion_enviar", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({day: document.getElementById("dia").value})
+      });
+      const j = await r.json();
+      alert(j.ok ? "Cierre enviado por WhatsApp." : ("Error: " + (j.error || r.status)));
+    } catch (e) { alert("Error: " + e); }
+    btn.disabled = false; btn.textContent = "Enviar cierre por WhatsApp";
   };
 });
 </script>
