@@ -122,7 +122,14 @@
       <label>Ejecutivo:
         <select id="sel-ejecutivo"></select>
       </label>
-      <span class="sub">Usa el rango de fechas general (Desde/Hasta del tablero). Barras = gesti&oacute;n del d&iacute;a. L&iacute;nea roja = venta del d&iacute;a.</span>
+      <label>Desde:
+        <input type="date" id="hist-desde">
+      </label>
+      <label>Hasta:
+        <input type="date" id="hist-hasta">
+      </label>
+      <button id="btn-hist-filtrar" class="b">Filtrar</button>
+      <span class="sub">Rango propio del hist&oacute;rico (por defecto todo el historial). Barras = gesti&oacute;n del d&iacute;a. L&iacute;nea roja = venta del d&iacute;a.</span>
     </div>
     <img id="img-historico" alt="Grafico historico" style="max-width:100%;border:1px solid var(--borde);border-radius:8px">
     <div style="overflow-x:auto">
@@ -279,11 +286,17 @@ async function carga() {
     h.ejecutivos.map(e => '<option value="' + e.nombre + '">' + e.nombre + '</option>').join("");
   sel.dataset.done = "1";
   const img = document.getElementById("img-historico");
+  const hd = document.getElementById("hist-desde"), hh = document.getElementById("hist-hasta");
+  if (!hd.value && h.dias[0]) hd.value = h.dias[0];
+  if (!hh.value && h.dias[h.dias.length - 1]) hh.value = h.dias[h.dias.length - 1];
+  const hsDesde = hd.value || "", hsHasta = hh.value || "";
   const pintar = () => {
     const nom = sel.value;
+    const a = document.getElementById("hist-desde").value || hsDesde;
+    const b = document.getElementById("hist-hasta").value || hsHasta;
     img.src = "/api/grafico?ejecutivo=" + encodeURIComponent(nom) +
-              "&desde=" + desde + "&hasta=" + hasta;
-    const rango = h.dias.filter(ds => ds >= desde && ds <= hasta);
+              "&desde=" + a + "&hasta=" + b;
+    const rango = h.dias.filter(ds => ds >= a && ds <= b);
     const tbh = document.getElementById("tbody-historico");
     const seria = rango.map(ds => {
       const rr = nom === "GLOBAL"
@@ -301,6 +314,9 @@ async function carga() {
       `<td class="num">${s.cierres}</td><td class="num">${Number(s.venta).toFixed(2)}</td></tr>`);
   };
   if (sel.dataset.done === "1") sel.onchange = pintar;
+  document.getElementById("btn-hist-filtrar").onclick = pintar;
+  document.getElementById("hist-desde").onchange = pintar;
+  document.getElementById("hist-hasta").onchange = pintar;
   pintar();
 
   // PDFs del mes

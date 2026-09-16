@@ -219,7 +219,9 @@ function histChart(ss){
 }
 
 function renderHistorico(nombre){
-  var days = diasInRange(estado.desde, estado.hasta);
+  var hd = document.getElementById('hist-desde').value || estado.desde;
+  var hh = document.getElementById('hist-hasta').value || estado.hasta;
+  var days = diasInRange(hd, hh);
   var uid = null;
   D.execs.forEach(function(e){ if(e.nombre===nombre) uid=e.uid; });
   var ss = days.map(function(ds){
@@ -335,6 +337,13 @@ document.addEventListener('DOMContentLoaded', function(){
   selHist.innerHTML = '<option value="GLOBAL">GLOBAL</option>' +
     D.execs.map(function(e){ return '<option value="'+esc(e.nombre)+'">'+esc(e.nombre)+'</option>'; }).join('');
   selHist.onchange = function(){ renderHistorico(selHist.value); };
+
+  var hds = document.getElementById('hist-desde'), hhs = document.getElementById('hist-hasta');
+  hds.min = hhs.min = PRI; hds.max = hhs.max = ULT;
+  hds.value = PRI; hhs.value = ULT;
+  document.getElementById('btn-hist-filtrar').onclick = function(){ renderHistorico(selHist.value); };
+  hds.onchange = function(){ renderHistorico(selHist.value); };
+  hhs.onchange = function(){ renderHistorico(selHist.value); };
 
   document.getElementById('btn-ver').onclick = function(){
     if(fd.value>fh.value){ var t=fd.value; fd.value=fh.value; fh.value=t; }
@@ -466,7 +475,10 @@ def main():
     <h2>Hist&oacute;rico de gesti&oacute;n por ejecutivo</h2>
     <div class="barra">
       <label>Ejecutivo: <select id="sel-hist"></select></label>
-      <span class="sub">Usa el rango Desde/Hasta general. Barras = gesti&oacute;n del d&iacute;a (azul = prospectados, verde = atendidos, naranja = cierres). L&iacute;nea roja = venta del d&iacute;a.</span>
+      <label>Desde: <input type="date" id="hist-desde"></label>
+      <label>Hasta: <input type="date" id="hist-hasta"></label>
+      <button id="btn-hist-filtrar" class="b">Filtrar</button>
+      <span class="sub">Rango propio del hist&oacute;rico (por defecto todo el historial). Barras = gesti&oacute;n del d&iacute;a (azul = prospectados, verde = atendidos, naranja = cierres). L&iacute;nea roja = venta del d&iacute;a.</span>
     </div>
     <div id="hist-chart" style="margin-bottom:10px"></div>
     <div style="overflow-x:auto">
