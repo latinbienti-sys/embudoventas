@@ -53,6 +53,7 @@
   <h1>Embudo de Ventas &#8226; Latinbien</h1>
   <span class="sub" id="estado-sync"></span>
   <span class="sub">Datos de Odoo en cache local (solo lectura)</span>
+  <a href="/stock" style="margin-left:auto; color:#fff; text-decoration:none; font-size:13px; border:1px solid #fff; border-radius:6px; padding:6px 12px;">Stock en almacenes &rarr;</a>
 </header>
 
 <main>
@@ -84,8 +85,9 @@
     </section>
 
     <section class="tarjeta">
-      <h2>Embudo de ventas del mes (flujo)</h2>
-      <p class="aviso" id="aviso-embudo" hidden>Sin datos: ejecuta la sincronizaci&oacute;n diaria (sincronizar.bat).</p>
+      <h2>Embudo de ventas por flujo (rango seleccionado)</h2>
+      <p class="nota">Flujo en el rango Desde/Hasta: movimientos de etapa por ejecutivo. Contacto Tienda y Seguimiento whatsapp se suman del seguimiento/registro local.</p>
+      <p class="aviso" id="aviso-embudo" hidden>Sin datos en el rango: sincroniza con sincronizar.bat o ampl&iacute;a las fechas.</p>
       <div style="overflow-x:auto">
         <table>
           <thead id="thead-funnel"></thead>

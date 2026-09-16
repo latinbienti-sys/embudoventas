@@ -103,10 +103,9 @@ function renderDaily(){
 }
 
 function renderFunnel(){
-  var ym = estado.hasta.slice(0,7);
-  var days = diasDelMes(ym);
+  var days = diasInRange(estado.desde, estado.hasta);
+  document.getElementById('funnel-rango').innerHTML = estado.desde + ' a ' + estado.hasta;
   var stages = D.stages||[];
-  document.getElementById('funnel-mes').innerHTML = ym;
   var maxf = 1;
   var rows = D.execs.map(function(e){
     var row = {nombre:e.nombre};
@@ -429,8 +428,8 @@ def main():
   </section>
 
   <section class="tarjeta">
-    <h2>Embudo de ventas del mes (flujo) &#8212; <span id="funnel-mes"></span></h2>
-    <p class="nota">Flujo del mes del d&iacute;a "Hasta": movimientos de etapa por ejecutivo. Contacto Tienda y Seguimiento whatsapp se suman del seguimiento/registro local.</p>
+    <h2>Embudo de ventas por flujo (rango) &#8212; <span id="funnel-rango"></span></h2>
+    <p class="nota">Flujo en el rango Desde/Hasta: movimientos de etapa por ejecutivo. Contacto Tienda y Seguimiento whatsapp se suman del seguimiento/registro local.</p>
     <div style="overflow-x:auto">
       <table>
         <thead id="thead-funnel"></thead>
