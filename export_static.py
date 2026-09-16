@@ -267,6 +267,17 @@ function renderVista(){
   items.forEach(function(x){ stages.forEach(function(st){ if(x.funnel[st]>maxf) maxf=x.funnel[st]; }); x.serie.forEach(function(v){ if(v>maxd) maxd=v; }); });
   var fecha = new Date(estado.hasta.slice(0,4), +estado.hasta.slice(5,7)-1, 1).toLocaleDateString('es', {month:'long', year:'numeric'});
   var metaV = Math.round(D.sales_meta||0);
+  var filasTodo = rows.map(function(r){
+    var celdas = stages.map(function(st){ return '<td class="num">'+(r.funnel[st]||0)+'</td>'; }).join('');
+    return '<tr><td>'+esc(r.nombre)+'</td>'+celdas+'<td class="num">US$'+dinero(r.venta)+'</td></tr>';
+  }).join('');
+  var totFilas = stages.map(function(st){
+    var n=0; rows.forEach(function(r){ n += r.funnel[st]||0; }); return '<td class="num">'+n+'</td>';
+  }).join('');
+  var totVentas = 0; rows.forEach(function(r){ totVentas += r.venta; });
+  var thTodo = stages.map(function(s){ return '<th class="num">'+esc(s)+'</th>'; }).join('')+'<th class="num">Venta mes</th>';
+  var todosHtml = '<div style="overflow-x:auto"><table><thead><tr><th>Todos los ejecutivos</th>'+thTodo+'</tr></thead>'+
+    '<tbody>'+filasTodo+'<tr class="total"><td>Total</td>'+totFilas+'<td class="num">US$'+dinero(totVentas)+'</td></tr></tbody></table></div>';
   document.getElementById('pestanas').innerHTML = items.map(function(x,i){
     return '<button data-i="'+i+'" class="'+(i?'':'activa')+'">'+esc(x.nombre)+'</button>';
   }).join('');
@@ -282,6 +293,7 @@ function renderVista(){
     var pend = Math.max(0, metaV-x.venta);
     return '<div class="vista-panel" data-i="'+i+'"'+(i?' hidden':'')+'>'+
       '<p class="nota"><b>Informe del mes '+esc(fecha)+'</b> &mdash; '+esc(x.nombre)+'</p>'+
+      (i==='0' || i===0 ? todosHtml : '')+
       '<div style="overflow-x:auto"><table><thead><tr><th>Flujo (embudo del mes)</th>'+
       stages.map(function(s){ return '<th class="num">'+esc(s)+'</th>'; }).join('')+'</tr></thead>'+
       '<tbody><tr><td>'+esc(x.nombre)+'</td>'+celdas+'</tr></tbody></table></div>'+
