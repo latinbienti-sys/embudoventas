@@ -16,7 +16,6 @@ from flask import Flask, jsonify, render_template, request, send_file, Response
 import store
 import monthly_pdf
 import graficos
-import grafico_stock
 
 BASE = Path(__file__).parent
 
@@ -42,140 +41,6 @@ def _active_execs():
                  if any(t in store.normalize(e["name"]) or store.normalize(e["name"]) in t
                         for t in active)]
     return execs
-
-
-def _bucket_labels(buckets):
-    """Etiquetas de antiguedad: ['Hasta 30 días','31-60 días',...,'Más de 180 días','Sin fecha']."""
-    labels = []
-    for i, b in enumerate(buckets):
-        if i == 0:
-            labels.append(f"Hasta {b} d\u00edas")
-        else:
-            labels.append(f"{buckets[i - 1] + 1}-{b} d\u00edas")
-    labels.append(f"M\u00e1s de {buckets[-1]} d\u00edas")
-    labels.append("Sin fecha")
-    return labels
-
-
-def _bucket_name(age, buckets, labels):
-    if age is None:
-        return labels[-1]
-    for i, b in enumerate(buckets):
-        if age <= b:
-            return labels[i]
-    return labels[-2]
-
-
-def _estrategias_default(labels):
-    return {
-        labels[0]: "Rotaci\u00f3n normal: monitorear demanda vs costo; mantener precio.",
-        labels[1]: "Impulsar venta: destacar en cat\u00e1logo; mantener precio.",
-        labels[2]: "Promoci\u00f3n: descuento 5-10% o combos; vigilar salida.",
-        labels[3]: "Oferta activa: descuento 15-25%; evaluar devoluci\u00f3n/trueque con proveedor.",
-        labels[4]: "Liquidaci\u00f3n: descuento \u2265 30%, venta a mayorista o donaci\u00f3n; revisar merma.",
-        labels[5]: "Verificar la fecha de recepci\u00f3n del lote.",
-    }
-
-
-def _estrategias(cfg, labels):
-    """Estrategia sugerida por tramo de antiguedad (configurable en stock_strategies)."""
-    plan = _estrategias_default(labels)
-    for k, texto in (cfg.get("stock_strategies") or {}).items():
-        if k.isdigit():
-            idx = int(k)
-            if 0 <= idx < len(labels):
-                plan[labels[idx]] = texto
-        elif k in plan:
-            plan[k] = texto
-    return plan
-
-
-def build_stock():
-    """Stock disponible (solo almacenes, available>0) + antiguedad + valor segun
-    compra (costo) + estrategia sugerida por tramo de tiempo."""
-    filtro = [store.normalize(x) for x in (cfg.get("stock_location_filter") or [])]
-    buckets = sorted((cfg.get("stock_aging_buckets") or [30, 60, 90, 180]))
-    labels = _bucket_labels(buckets)
-    estrategias = _estrategias(cfg, labels)
-    hoy = date.today()
-    rows = []
-    locs = {}
-    resumen = {b: {"unidades": 0, "valor": 0.0, "items": 0} for b in labels}
-
-    def _nuevo_loc(loc_id, nombre):
-        return {
-            "location_id": loc_id, "location_name": nombre,
-            "total_units": 0, "total_items": 0, "max_age": 0,
-            "buckets": {b: 0 for b in labels},
-        }
-
-    for r in store.get_stock_cache(cfg["sqlite_path"]):
-        loc_nombre = r["location_name"]
-        if filtro and not any(f in store.normalize(loc_nombre) for f in filtro):
-            continue
-        disp = round(r["available"] or 0, 2)
-        if disp <= 0:
-            continue
-        age = None
-        if r["in_date"]:
-            try:
-                age = (hoy - date.fromisoformat(r["in_date"][:10])).days
-            except ValueError:
-                age = None
-        bucket = _bucket_name(age, buckets, labels)
-        costo = round(float(r["cost"] or 0), 2)
-        precio = round(float(r["sale_price"] or 0), 2)
-        valor = round(disp * costo, 2)
-        row = {
-            "product_id": r["product_id"],
-            "product_name": r["product_name"],
-            "default_code": r["default_code"],
-            "location_id": r["location_id"],
-            "location_name": loc_nombre,
-            "lot_name": r["lot_name"],
-            "in_date": r["in_date"],
-            "age_days": age,
-            "bucket": bucket,
-            "available": disp,
-            "cost": costo,
-            "price": precio,
-            "value": valor,
-            "strategy": estrategias[bucket],
-        }
-        rows.append(row)
-        L = locs.setdefault(r["location_id"], _nuevo_loc(r["location_id"], loc_nombre))
-        L["total_units"] += disp
-        L["total_items"] += 1
-        if age is not None:
-            L["max_age"] = max(L["max_age"], age)
-        L["buckets"][bucket] += disp
-        resumen[bucket]["unidades"] += disp
-        resumen[bucket]["valor"] += valor
-        resumen[bucket]["items"] += 1
-
-    rows.sort(key=lambda x: (x["age_days"] is None, -(x["age_days"] or 0)))
-    locations = sorted(locs.values(), key=lambda x: store.normalize(x["location_name"]))
-
-    for b in labels:
-        resumen[b]["valor"] = round(resumen[b]["valor"], 2)
-
-    total = {
-        "total_units": round(sum(L["total_units"] for L in locations), 2),
-        "total_items": sum(L["total_items"] for L in locations),
-        "max_age": max((L["max_age"] for L in locations), default=0),
-        "total_value": round(sum(resumen[b]["valor"] for b in labels), 2),
-        "buckets": {b: round(sum(L["buckets"][b] for L in locations), 2) for b in labels},
-    }
-    return {
-        "locations": locations,
-        "bucket_labels": labels,
-        "buckets": buckets,
-        "rows": rows,
-        "totals": total,
-        "resumen": resumen,
-        "estrategias": estrategias,
-        "synced_at": store.stock_synced_at(cfg["sqlite_path"]),
-    }
 
 
 def build_daily_panel(start: date, end: date):
@@ -434,27 +299,6 @@ def index():
         hora_envio=cfg.get("hora_envio_gestion", "20:00"),
         tiene_ghl=bool(cfg.get("gohighlevel", {}).get("api_key")),
     )
-
-
-@app.route("/stock")
-def stock_page():
-    return render_template(
-        "stock.html",
-        refresh_min=cfg.get("refresh_min", 60),
-    )
-
-
-@app.route("/api/stock", methods=["GET"])
-def api_stock():
-    return jsonify({**build_stock(), "last_sync": store.last_sync_ok(cfg["sqlite_path"])})
-
-
-@app.route("/api/grafico_stock")
-def api_grafico_stock():
-    png = grafico_stock.grafico_stock(build_stock())
-    if not png:
-        return jsonify({"ok": False, "error": "Sin stock con fecha"}), 404
-    return Response(png, mimetype="image/png")
 
 
 @app.route("/api/data", methods=["GET"])

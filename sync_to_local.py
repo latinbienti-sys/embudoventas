@@ -161,8 +161,7 @@ def main():
         print(f"  {day}: funnel ok | creados {total_c} | atendidos {total_t} | actividades {total_a} | movimientos {total_m} | ventas ${total_v:,.0f}")
 
     store.log_sync(cfg["sqlite_path"], True, f"sincronizado {since} -> {until}")
-    print("Listo. Datos guardados en", cfg["sqlite_path"])
-
+    print("Datos CRM listos en", cfg["sqlite_path"])
 
 if __name__ == "__main__":
     main()
