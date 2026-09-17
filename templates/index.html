@@ -128,9 +128,8 @@
         <input type="date" id="hist-hasta">
       </label>
       <button id="btn-hist-filtrar" class="b">Filtrar</button>
-      <span class="sub">Rango propio del hist&oacute;rico (por defecto todo el historial). Barras = gesti&oacute;n del d&iacute;a. L&iacute;nea roja = venta del d&iacute;a.</span>
+      <span class="sub">Rango propio del hist&oacute;rico (por defecto todo el historial). Tabla por d&iacute;a de prospectados, atendidos, cierres y venta.</span>
     </div>
-    <img id="img-historico" alt="Grafico historico" style="max-width:100%;border:1px solid var(--borde);border-radius:8px">
     <div style="overflow-x:auto">
       <table>
         <thead><tr>
@@ -301,7 +300,6 @@ async function carga() {
   sel.innerHTML = '<option value="GLOBAL">GLOBAL</option>' +
     h.ejecutivos.map(e => '<option value="' + e.nombre + '">' + e.nombre + '</option>').join("");
   sel.dataset.done = "1";
-  const img = document.getElementById("img-historico");
   const hd = document.getElementById("hist-desde"), hh = document.getElementById("hist-hasta");
   if (!hd.value && h.dias[0]) hd.value = h.dias[0];
   if (!hh.value && h.dias[h.dias.length - 1]) hh.value = h.dias[h.dias.length - 1];
@@ -310,8 +308,6 @@ async function carga() {
     const nom = sel.value;
     const a = document.getElementById("hist-desde").value || hsDesde;
     const b = document.getElementById("hist-hasta").value || hsHasta;
-    img.src = "/api/grafico?ejecutivo=" + encodeURIComponent(nom) +
-              "&desde=" + a + "&hasta=" + b;
     const rango = h.dias.filter(ds => ds >= a && ds <= b);
     const tbh = document.getElementById("tbody-historico");
     const seria = rango.map(ds => {

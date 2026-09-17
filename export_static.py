@@ -179,45 +179,6 @@ function renderCierre(){
     'atendieron <b>'+tv.a+'</b>, cerraron <b>'+tv.ci+'</b>.';
 }
 
-function histChart(ss){
-  var n=ss.length; if(!n) return '<p class="nota">Sin datos en el rango.</p>';
-  var W = Math.max(320, n*52+52), H = 205, padL=42, padB=24, padT=8;
-  var IW = W-padL, IH = H-padB-padT;
-  var maxB = 1; ss.forEach(function(x){ var s=x.p+x.a+x.c; if(s>maxB) maxB=s; });
-  var maxV = 1; ss.forEach(function(x){ if(x.v>maxV) maxV=x.v; });
-  var stepB = Math.ceil(maxB/4), stepV = Math.ceil(maxV/4);
-  var bw = Math.min(34, Math.floor((IW-8)/n));
-  var out = '<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg">';
-  for(var k=0;k<=4;k++){
-    var y = padT+IH - IH*k/4;
-    out += '<line x1="'+padL+'" y1="'+y+'" x2="'+W+'" y2="'+y+'" stroke="#eef1f5"/>';
-    out += '<text x="'+(padL-6)+'" y="'+(y+4)+'" font-size="10" fill="#56657a" text-anchor="end">'+(k*stepB)+'</text>';
-    out += '<text x="'+(W-2)+'" y="'+(y+4)+'" font-size="10" fill="#8a1d1d" text-anchor="end">'+(k*stepV)+'</text>';
-  }
-  var pit;
-  ss.forEach(function(x,i){
-    var cx = padL + (IW/n)*i + (IW/n)/2;
-    var bwNow = bw;
-    var yt = padT+IH - IH*(x.a+x.c)/maxB, yi = padT+IH - IH*x.c/maxB, yp = padT+IH - IH*(x.p+x.a+x.c)/maxB;
-    out += '<rect x="'+(cx-bwNow/2)+'" y="'+yt+'" width="'+bwNow+'" height="'+Math.max(0,IH*(x.a+x.c)/maxB)+'" fill="#1e8e5a"/>';
-    out += '<rect x="'+(cx-bwNow/2)+'" y="'+yi+'" width="'+bwNow+'" height="'+Math.max(0,IH*x.c/maxB)+'" fill="#e07b2a"/>';
-    out += '<rect x="'+(cx-bwNow/2)+'" y="'+yp+'" width="'+bwNow+'" height="'+Math.max(0,IH*x.p/maxB)+'" fill="#2f7cc9"/>';
-    var vy = padT+IH - IH*x.v/maxV;
-    if(i===0){ pit = 'M'+cx+' '+vy; } else { pit += ' L'+cx+' '+vy; }
-  });
-  out += '<path d="'+pit+'" fill="none" stroke="#8a1d1d" stroke-width="2"/>';
-  ss.forEach(function(x,i){
-    var cx = padL + (IW/n)*i + (IW/n)/2;
-    var vy = padT+IH - IH*x.v/maxV;
-    out += '<circle cx="'+cx+'" cy="'+vy+'" r="2.5" fill="#8a1d1d"/>';
-    var lab = x.ds.slice(5);
-    if(n>14 && i%3!==0) return;
-    out += '<text x="'+cx+'" y="'+(H-6)+'" font-size="9" fill="#56657a" text-anchor="middle">'+lab+'</text>';
-  });
-  out += '</svg>';
-  return out;
-}
-
 function renderHistorico(nombre){
   var hd = document.getElementById('hist-desde').value || estado.desde;
   var hh = document.getElementById('hist-hasta').value || estado.hasta;
@@ -237,7 +198,6 @@ function renderHistorico(nombre){
     }
     return {ds:ds, p:p, a:a, c:ci, v:v};
   });
-  document.getElementById('hist-chart').innerHTML = histChart(ss);
   document.getElementById('tbody-historico').innerHTML = ss.map(function(x){
     return '<tr><td>'+x.ds+'</td><td class="num">'+x.p+'</td><td class="num">'+x.a+'</td>'+
            '<td class="num">'+x.c+'</td><td class="num">'+dinero(x.v)+'</td></tr>';
@@ -508,9 +468,8 @@ def main():
       <label>Desde: <input type="date" id="hist-desde"></label>
       <label>Hasta: <input type="date" id="hist-hasta"></label>
       <button id="btn-hist-filtrar" class="b">Filtrar</button>
-      <span class="sub">Rango propio del hist&oacute;rico (por defecto todo el historial). Barras = gesti&oacute;n del d&iacute;a (azul = prospectados, verde = atendidos, naranja = cierres). L&iacute;nea roja = venta del d&iacute;a.</span>
+      <span class="sub">Rango propio del hist&oacute;rico (por defecto todo el historial). Tabla por d&iacute;a de prospectados, atendidos, cierres y venta.</span>
     </div>
-    <div id="hist-chart" style="margin-bottom:10px"></div>
     <div style="overflow-x:auto">
       <table>
         <thead><tr>

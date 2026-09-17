@@ -4,4 +4,4 @@ pdf_reports/
 __pycache__/
 *.pyc
 .venv
-venv/
+venv/sync_horaria.log
