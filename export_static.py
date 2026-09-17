@@ -276,7 +276,7 @@ function tabClick(){
 }
 
 function renderLineaCredito(){
-  var lc = D.linea_credito || {team:[], rows:[], totals:{por_etapa:{}}, detalle:[]};
+  var lc = D.linea_credito || {team:[], rows:[], totals:{por_etapa:{}}, detalle:[], dias:[], por_dia:{}, detalle_dia:{}};
   var th = document.getElementById('thead-lc'), tb = document.getElementById('tbody-lc');
   var thd = document.getElementById('thead-lc-det'), tbd = document.getElementById('tbody-lc-det');
   var stages = ['total','gestionados'].concat(Object.keys(lc.totals.por_etapa||{}));
@@ -301,6 +301,51 @@ function renderLineaCredito(){
   tbd.innerHTML = (lc.detalle||[]).map(function(x){
     return '<tr><td>'+esc(x.nombre)+'</td><td>'+esc(x.asesor)+'</td><td>'+esc(x.etapa)+'</td></tr>';
   }).join('') || '<tr><td colspan="3" class="nota">Sin contactos CREDIMOTOS gestionados en el equipo L&iacute;nea de Cr&eacute;dito.</td></tr>';
+
+  var inp = document.getElementById('lc-dia');
+  if(inp && !inp.value){
+    var hoy = new Date().toISOString().slice(0,10);
+    inp.value = (lc.dias||[]).indexOf(hoy)>=0 ? hoy : (lc.dias||[]).slice(-1)[0] || hoy;
+  }
+  renderLcDia(inp ? inp.value : '');
+}
+
+function renderLcDia(dia){
+  var lc = D.linea_credito || {};
+  var stages = lc.stages || [];
+  var th = document.getElementById('thead-lc-dia'), tb = document.getElementById('tbody-lc-dia');
+  var thd = document.getElementById('thead-lc-diadet'), tbd = document.getElementById('tbody-lc-diadet');
+  if(!th) return;
+  var porDia = (lc.por_dia||{})[dia] || {};
+  th.innerHTML = '<tr><th>Gestionados el '+esc(dia||'-')+'</th>'+
+    stages.map(function(s){ return '<th class="num">'+esc(s)+'</th>'; }).join('')+
+    '<th class="num">Sin clasificar</th><th class="num">Total</th></tr>';
+  if(!dia || !Object.keys(porDia).length){
+    tb.innerHTML = '<tr><td colspan="'+(stages.length+3)+'" class="nota">Sin gestiones CREDIMOTOS ese d&iacute;a. '+
+      'D&iacute;as con datos: '+esc((lc.dias||[]).join(', ')||'ninguno')+'.</td></tr>';
+    thd.innerHTML=''; tbd.innerHTML=''; return;
+  }
+  var tot = {}, totSin = 0, totTotal = 0;
+  tb.innerHTML = (lc.team||[]).map(function(t){
+    var por = porDia[t.norm]||{};
+    var vals = stages.map(function(s){ return por[s]||0; });
+    var suma = vals.reduce(function(a,b){ return a+b; },0);
+    var total = por._total||0;
+    var sin = Math.max(0, total-suma);
+    stages.forEach(function(s,i){ tot[s]=(tot[s]||0)+vals[i]; });
+    totSin += sin; totTotal += total;
+    return '<tr><td>'+esc(t.nombre)+'</td>'+
+      vals.map(function(v){ return '<td class="num">'+v+'</td>'; }).join('')+
+      '<td class="num">'+sin+'</td><td class="num">'+total+'</td></tr>';
+  }).join('');
+  tb.insertAdjacentHTML('beforeend','<tr class="total"><td>Total</td>'+
+    stages.map(function(s){ return '<td class="num">'+(tot[s]||0)+'</td>'; }).join('')+
+    '<td class="num">'+totSin+'</td><td class="num">'+totTotal+'</td></tr>');
+  var det = (lc.detalle_dia||{})[dia] || [];
+  thd.innerHTML = '<tr><th>Contacto</th><th>Ejecutivo</th><th>Etapa</th></tr>';
+  tbd.innerHTML = det.map(function(x){
+    return '<tr><td>'+esc(x.nombre)+'</td><td>'+esc(x.asesor)+'</td><td>'+esc(x.etapa)+'</td></tr>';
+  }).join('');
 }
 
 function todo(){
@@ -333,6 +378,17 @@ document.addEventListener('DOMContentLoaded', function(){
   document.getElementById('btn-hist-filtrar').onclick = function(){ renderHistorico(selHist.value); };
   hds.onchange = function(){ renderHistorico(selHist.value); };
   hhs.onchange = function(){ renderHistorico(selHist.value); };
+
+  var lcDia = document.getElementById('lc-dia');
+  document.getElementById('btn-lc-dia').onclick = function(){ renderLcDia(lcDia.value); };
+  document.getElementById('btn-lc-hoy').onclick = function(){
+    lcDia.value = new Date().toISOString().slice(0,10); renderLcDia(lcDia.value);
+  };
+  document.getElementById('btn-lc-todo').onclick = function(){
+    var ds = (D.linea_credito||{}).dias||[];
+    lcDia.value = ds.length ? ds[ds.length-1] : ''; renderLcDia(lcDia.value);
+  };
+  lcDia.onchange = function(){ renderLcDia(lcDia.value); };
 
   document.getElementById('btn-ver').onclick = function(){
     if(fd.value>fh.value){ var t=fd.value; fd.value=fh.value; fh.value=t; }
@@ -516,6 +572,27 @@ def main():
       <table>
         <thead id="thead-lc-det"></thead>
         <tbody id="tbody-lc-det"></tbody>
+      </table>
+    </div>
+    <h3 style="margin-top:18px">Gesti&oacute;n diaria CREDIMOTOS</h3>
+    <p class="sub">
+      D&iacute;a:
+      <input type="date" id="lc-dia">
+      <button id="btn-lc-dia" class="btn">&nbsp;Ver d&iacute;a</button>
+      <button id="btn-lc-hoy" class="btn">&nbsp;Hoy</button>
+      <button id="btn-lc-todo" class="btn">&nbsp;&Uacute;ltimo d&iacute;a</button>
+      <span class="sub">&nbsp;Contactos CREDIMOTOS con movimiento (lead) ese d&iacute;a.</span>
+    </p>
+    <div style="overflow-x:auto">
+      <table>
+        <thead id="thead-lc-dia"></thead>
+        <tbody id="tbody-lc-dia"></tbody>
+      </table>
+    </div>
+    <div style="overflow-x:auto; margin-top:14px">
+      <table>
+        <thead id="thead-lc-diadet"></thead>
+        <tbody id="tbody-lc-diadet"></tbody>
       </table>
     </div>
   </section>

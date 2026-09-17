@@ -10,7 +10,7 @@ import argparse
 import json
 import sys
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -119,6 +119,24 @@ def main():
             })
         store.upsert_lc_credimotos(cfg["sqlite_path"], rows)
         print(f"Linea de Credito CREDIMOTOS: {len(rows)} contactos")
+
+        # Gestion diaria: cada contacto gestionado en el dia en que su lead
+        # tuvo movimiento (write_date). Permite filtrar "motos de hoy".
+        pid_asesor = {}
+        for p in contacts:
+            a = p.get("x_asesor_linea_credito") or [0, ""]
+            pid_asesor[p["id"]] = a[0] if isinstance(a, list) else 0
+        gestion = {}
+        for l in leads:
+            pid = (l.get("partner_id") or [0])[0]
+            if not pid or not l.get("write_date"):
+                continue
+            dia = datetime.fromisoformat(l["write_date"]).astimezone(tz).date().isoformat()
+            st = (l.get("stage_id") or [0, ""])[1] if l.get("stage_id") else ""
+            gestion[(dia, pid)] = (dia, pid, pid_asesor.get(pid, 0),
+                                   funnel2crm.get(store.normalize(st), ""), st or "")
+        store.upsert_lc_gestion(cfg["sqlite_path"], list(gestion.values()))
+        print(f"Linea de Credito CREDIMOTOS: {len(gestion)} gestiones diarias")
 
     # ---------- Actividad 'Atención Puerta' (Contacto Tienda) ----------
     puerta_type_id = None

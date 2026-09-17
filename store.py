@@ -102,6 +102,15 @@ def init_db(path):
                 updated_at   TEXT
             );
 
+            CREATE TABLE IF NOT EXISTS lc_gestion (
+                day          TEXT NOT NULL,
+                partner_id   INTEGER NOT NULL,
+                odoo_uid     INTEGER,
+                funnel_stage TEXT,
+                lead_stage   TEXT,
+                PRIMARY KEY (day, partner_id)
+            );
+
             CREATE TABLE IF NOT EXISTS sync_log (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 run_at      TEXT NOT NULL,
@@ -237,6 +246,24 @@ def upsert_lc_credimotos(path, rows):
                 (int(r["partner_id"]), r["name"], r.get("asesor_uid") or None,
                  r.get("asesor_name") or "", r.get("lead_id"), r.get("lead_stage") or "",
                  r.get("funnel_stage") or ""),
+            )
+        c.commit()
+
+
+def upsert_lc_gestion(path, rows):
+    """Historial de gestion diaria de contactos CREDIMOTOS.
+
+    rows: iterable de (dia, partner_id, odoo_uid, funnel_stage, lead_stage).
+    Se reemplaza completo en cada sincronizacion (los datos vienen de Odoo).
+    """
+    with closing(get_conn(path)) as c:
+        c.execute("DELETE FROM lc_gestion")
+        for r in rows:
+            c.execute(
+                """INSERT OR REPLACE INTO lc_gestion
+                   (day, partner_id, odoo_uid, funnel_stage, lead_stage)
+                   VALUES (?,?,?,?,?)""",
+                (r[0], int(r[1]), r[2], r[3] or "", r[4] or ""),
             )
         c.commit()
 
@@ -387,6 +414,15 @@ def get_lc_credimotos(path):
         return [dict(r) for r in c.execute(
             "SELECT partner_id, name, asesor_uid, asesor_name, lead_id, "
             "lead_stage, funnel_stage FROM lc_credimotos ORDER BY name"
+        )]
+
+
+def get_lc_gestion(path):
+    """Gestion diaria de contactos CREDIMOTOS (historial por dia)."""
+    with closing(get_conn(path)) as c:
+        return [dict(r) for r in c.execute(
+            "SELECT day, partner_id, odoo_uid, funnel_stage, lead_stage "
+            "FROM lc_gestion ORDER BY day"
         )]
 
 

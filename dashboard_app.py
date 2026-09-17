@@ -222,7 +222,8 @@ def build_historico():
 def build_linea_credito():
     """Equipo Linea de Credito: contactos CREDIMOTOS del modulo contactos."""
     if not cfg.get("linea_credito_team"):
-        return {"team": [], "rows": [], "totals": {}, "detalle": []}
+        return {"team": [], "rows": [], "totals": {}, "detalle": [],
+                "dias": [], "por_dia": {}, "detalle_dia": {}}
     team_cfg = [store.normalize(n) for n in cfg["linea_credito_team"]]
     stages = cfg.get("funnel_stages", [])
     cont = store.get_lc_credimotos(cfg["sqlite_path"])
@@ -253,6 +254,32 @@ def build_linea_credito():
             totals[s] += por_team[t]["por_etapa"][s]
         tot_g += por_team[t]["gestionados"]
         tot_c += por_team[t]["total"]
+
+    # ---- Gestion diaria (que contactos CREDIMOTOS se movieron cada dia) ----
+    names = {c["partner_id"]: c["name"] for c in cont}
+    uid_norm = {e["odoo_uid"]: store.normalize(e["name"]) for e in _active_execs()}
+    por_dia = {}
+    detalle_dia = {}
+    for g in store.get_lc_gestion(cfg["sqlite_path"]):
+        norm = uid_norm.get(g.get("odoo_uid"))
+        if norm not in team_cfg:
+            continue
+        dia = g["day"]
+        etapa = (g.get("funnel_stage") or "").strip()
+        slot = por_dia.setdefault(dia, {}).setdefault(
+            norm, {s: 0 for s in stages})
+        slot["_total"] = slot.get("_total", 0) + 1
+        if etapa in slot:
+            slot[etapa] += 1
+        detalle_dia.setdefault(dia, []).append({
+            "nombre": names.get(g["partner_id"], f"#{g['partner_id']}"),
+            "asesor": execs_norm.get(norm, norm.upper()),
+            "etapa": g.get("lead_stage") or "-",
+        })
+    dias = sorted(por_dia.keys())
+    for d in dias:
+        detalle_dia[d].sort(key=lambda x: (x["asesor"], x["nombre"]))
+
     return {
         "team": team_dsp,
         "rows": [{"norm": t, "por_etapa": por_team[t]["por_etapa"],
@@ -260,6 +287,10 @@ def build_linea_credito():
                   "total": por_team[t]["total"]} for t in team_cfg],
         "totals": {"total": tot_c, "gestionados": tot_g, "por_etapa": totals},
         "detalle": sorted(detalle, key=lambda x: (x["asesor"], x["nombre"])),
+        "stages": stages,
+        "dias": dias,
+        "por_dia": por_dia,
+        "detalle_dia": detalle_dia,
     }
 
 

@@ -181,6 +181,27 @@
         <tbody id="tbody-lc-det"></tbody>
       </table>
     </div>
+    <h3 style="margin-top:18px">Gesti&oacute;n diaria CREDIMOTOS</h3>
+    <p class="sub">
+      D&iacute;a:
+      <input type="date" id="lc-dia">
+      <button id="btn-lc-dia" class="btn">&nbsp;Ver d&iacute;a</button>
+      <button id="btn-lc-hoy" class="btn">&nbsp;Hoy</button>
+      <button id="btn-lc-todo" class="btn">&nbsp;Todo el historial</button>
+      <span class="sub">&nbsp;Contactos CREDIMOTOS con movimiento (lead) ese d&iacute;a.</span>
+    </p>
+    <div style="overflow-x:auto">
+      <table>
+        <thead id="thead-lc-dia"></thead>
+        <tbody id="tbody-lc-dia"></tbody>
+      </table>
+    </div>
+    <div class="m2" style="overflow-x:auto">
+      <table>
+        <thead id="thead-lc-diadet"></thead>
+        <tbody id="tbody-lc-diadet"></tbody>
+      </table>
+    </div>
   </section>
 </main>
 
@@ -349,8 +370,10 @@ async function carga() {
 }
 
 let vistaActiva = "";
+let lcData = {};
 
 function renderLineaCredito(lc) {
+  lcData = lc || {};
   const th = document.getElementById("thead-lc");
   const tb = document.getElementById("tbody-lc");
   const thd = document.getElementById("thead-lc-det");
@@ -377,6 +400,54 @@ function renderLineaCredito(lc) {
   tbd.innerHTML = (lc.detalle || []).map(x =>
     `<tr><td>${x.nombre}</td><td>${x.asesor}</td><td>${x.etapa}</td></tr>`).join("") ||
     `<tr><td colspan="3" class="nota">Sin contactos CREDIMOTOS gestionados en el equipo L&iacute;nea de Cr&eacute;dito.</td></tr>`;
+
+  const inp = document.getElementById("lc-dia");
+  if (inp && !inp.value) {
+    const hoy = new Date().toISOString().slice(0, 10);
+    inp.value = (lc.dias || []).includes(hoy) ? hoy
+      : (lc.dias || []).slice(-1)[0] || hoy;
+  }
+  renderLcDia(inp ? inp.value : "");
+}
+
+function renderLcDia(dia) {
+  const lc = lcData || {};
+  const stages = lc.stages || [];
+  const th = document.getElementById("thead-lc-dia");
+  const tb = document.getElementById("tbody-lc-dia");
+  const thd = document.getElementById("thead-lc-diadet");
+  const tbd = document.getElementById("tbody-lc-diadet");
+  if (!th) return;
+  const porDia = (lc.por_dia || {})[dia] || {};
+  const hay = dia && Object.keys(porDia).length;
+  th.innerHTML = `<tr><th>Gestionados el ${dia || "-"}</th>` +
+    stages.map(s => `<th class="num">${s}</th>`).join("") +
+    "<th class=\"num\">Sin clasificar</th><th class=\"num\">Total</th></tr>";
+  if (!hay) {
+    tb.innerHTML = `<tr><td colspan="${stages.length + 3}" class="nota">` +
+      `Sin gestiones CREDIMOTOS ese d&iacute;a. Elige otro d&iacute;a (d&iacute;as con datos: ${(lc.dias || []).join(", ") || "ninguno"}).</td></tr>`;
+    thd.innerHTML = ""; tbd.innerHTML = "";
+    return;
+  }
+  let tot = {}, totSin = 0, totTotal = 0;
+  tb.innerHTML = (lc.team || []).map(t => {
+    const por = porDia[t.norm] || {};
+    const vals = stages.map(s => por[s] || 0);
+    const suma = vals.reduce((a, b) => a + b, 0);
+    const total = por._total || 0;
+    const sin = Math.max(0, total - suma);
+    stages.forEach((s, i) => tot[s] = (tot[s] || 0) + vals[i]);
+    totSin += sin; totTotal += total;
+    return `<tr><td>${t.nombre}</td>` + vals.map(v => `<td class="num">${v}</td>`).join("") +
+      `<td class="num">${sin}</td><td class="num">${total}</td></tr>`;
+  }).join("");
+  tb.insertAdjacentHTML("beforeend", "<tr class='total'><td>Total</td>" +
+    stages.map(s => `<td class="num">${tot[s] || 0}</td>`).join("") +
+    `<td class="num">${totSin}</td><td class="num">${totTotal}</td></tr>`);
+  const det = (lc.detalle_dia || {})[dia] || [];
+  thd.innerHTML = "<tr><th>Contacto</th><th>Ejecutivo</th><th>Etapa</th></tr>";
+  tbd.innerHTML = det.map(x =>
+    `<tr><td>${x.nombre}</td><td>${x.asesor}</td><td>${x.etapa}</td></tr>`).join("");
 }
 
 function renderVista(V) {
@@ -448,6 +519,17 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btn-ver").onclick = () => carga();
   fd.onchange = () => { if (fd.value > fh.value) fh.value = fd.value; carga(); };
   fh.onchange = () => { if (fh.value < fd.value) fd.value = fh.value; carga(); };
+
+  const lcDia = document.getElementById("lc-dia");
+  document.getElementById("btn-lc-dia").onclick = () => renderLcDia(lcDia.value);
+  document.getElementById("btn-lc-hoy").onclick = () => {
+    lcDia.value = new Date().toISOString().slice(0, 10); renderLcDia(lcDia.value);
+  };
+  document.getElementById("btn-lc-todo").onclick = () => {
+    const ds = (lcData.dias || []);
+    lcDia.value = ds.length ? ds[ds.length - 1] : ""; renderLcDia(lcDia.value);
+  };
+  lcDia.onchange = () => renderLcDia(lcDia.value);
 
   document.getElementById("tbody-daily").addEventListener("click", e => {
     const btn = e.target.closest("button[data-u]");
