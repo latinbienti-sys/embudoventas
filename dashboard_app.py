@@ -219,6 +219,50 @@ def build_historico():
     return {"dias": dias, "ejecutivos": exec_uid, "rend": rend, "totales": totales}
 
 
+def build_linea_credito():
+    """Equipo Linea de Credito: contactos CREDIMOTOS del modulo contactos."""
+    if not cfg.get("linea_credito_team"):
+        return {"team": [], "rows": [], "totals": {}, "detalle": []}
+    team_cfg = [store.normalize(n) for n in cfg["linea_credito_team"]]
+    stages = cfg.get("funnel_stages", [])
+    cont = store.get_lc_credimotos(cfg["sqlite_path"])
+    por_team = {t: {"total": 0, "gestionados": 0, "por_etapa": {s: 0 for s in stages}}
+                for t in team_cfg}
+    detalle = []
+    for r in cont:
+        a = store.normalize(r.get("asesor_name") or "")
+        if a not in por_team:
+            continue
+        row = por_team[a]
+        row["total"] += 1
+        etapa = (r.get("funnel_stage") or "").strip()
+        if r.get("lead_id") and r.get("lead_stage"):
+            row["gestionados"] += 1
+            if etapa in row["por_etapa"]:
+                row["por_etapa"][etapa] += 1
+            detalle.append({
+                "nombre": r["name"], "asesor": r.get("asesor_name") or "",
+                "etapa": r.get("lead_stage") or "-",
+            })
+    execs_norm = {store.normalize(e["name"]): e["name"] for e in _active_execs()}
+    team_dsp = [{"norm": t, "nombre": execs_norm.get(t, t.upper())} for t in team_cfg]
+    totals = {s: 0 for s in stages}
+    tot_g = tot_c = 0
+    for t in team_cfg:
+        for s in stages:
+            totals[s] += por_team[t]["por_etapa"][s]
+        tot_g += por_team[t]["gestionados"]
+        tot_c += por_team[t]["total"]
+    return {
+        "team": team_dsp,
+        "rows": [{"norm": t, "por_etapa": por_team[t]["por_etapa"],
+                  "gestionados": por_team[t]["gestionados"],
+                  "total": por_team[t]["total"]} for t in team_cfg],
+        "totals": {"total": tot_c, "gestionados": tot_g, "por_etapa": totals},
+        "detalle": sorted(detalle, key=lambda x: (x["asesor"], x["nombre"])),
+    }
+
+
 def build_vista(day: date):
     """Vista por ejecutivo (como el PDF del mes): embudo + diario + venta."""
     execs = _active_execs()
@@ -322,6 +366,7 @@ def api_data():
     vista = build_vista(day)
     cierre = build_cierre(day_desde, day_hasta)
     historico = build_historico()
+    linea_credito = build_linea_credito()
     if not store.last_snapshot_date(cfg["sqlite_path"]):
         funnel_rows = []
     last_sync = store.last_sync_ok(cfg["sqlite_path"])
@@ -337,6 +382,7 @@ def api_data():
         "vista": vista,
         "cierre": cierre,
         "historico": historico,
+        "linea_credito": linea_credito,
         "last_sync": last_sync,
     })
 

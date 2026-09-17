@@ -315,6 +315,34 @@ function tabClick(){
   }, this);
 }
 
+function renderLineaCredito(){
+  var lc = D.linea_credito || {team:[], rows:[], totals:{por_etapa:{}}, detalle:[]};
+  var th = document.getElementById('thead-lc'), tb = document.getElementById('tbody-lc');
+  var thd = document.getElementById('thead-lc-det'), tbd = document.getElementById('tbody-lc-det');
+  var stages = ['total','gestionados'].concat(Object.keys(lc.totals.por_etapa||{}));
+  th.innerHTML = '<tr><th>Ejecutivo (asesor L&iacute;nea de Cr&eacute;dito)</th>'+
+    stages.map(function(s){ return '<th class="num">'+esc(s)+'</th>'; }).join('')+'</tr>';
+  tb.innerHTML = lc.rows.map(function(r){
+    var por = r.por_etapa||{}, nm = r.norm;
+    lc.team.forEach(function(t){ if(t.norm===r.norm) nm = t.nombre; });
+    var celdas = stages.map(function(s){
+      var v = s==='total' ? r.total : s==='gestionados' ? r.gestionados : (por[s]||0);
+      return '<td class="num">'+v+'</td>';
+    }).join('');
+    return '<tr><td>'+esc(nm)+'</td>'+celdas+'</tr>';
+  }).join('');
+  var tt = lc.totals, tpor = tt.por_etapa||{};
+  var tot = stages.map(function(s){
+    var v = s==='total' ? tt.total : s==='gestionados' ? tt.gestionados : (tpor[s]||0);
+    return '<td class="num">'+v+'</td>';
+  }).join('');
+  tb.insertAdjacentHTML('beforeend', '<tr class="total"><td>Total</td>'+tot+'</tr>');
+  thd.innerHTML = '<tr><th>Contacto</th><th>Ejecutivo</th><th>Etapa actual del lead</th></tr>';
+  tbd.innerHTML = (lc.detalle||[]).map(function(x){
+    return '<tr><td>'+esc(x.nombre)+'</td><td>'+esc(x.asesor)+'</td><td>'+esc(x.etapa)+'</td></tr>';
+  }).join('') || '<tr><td colspan="3" class="nota">Sin contactos CREDIMOTOS gestionados en el equipo L&iacute;nea de Cr&eacute;dito.</td></tr>';
+}
+
 function todo(){
   renderDaily();
   renderFunnel();
@@ -322,6 +350,7 @@ function todo(){
   renderCierre();
   renderHistorico(selHist.value);
   renderVista();
+  renderLineaCredito();
 }
 
 var selHist = null;
@@ -393,6 +422,7 @@ def main():
         "meta_diaria": dashboard_app.cfg.get("daily_meta", {}) or {},
         "sales_meta": dashboard_app.cfg.get("sales_meta", 0) or 0,
         "daily": daily, "moves": moves, "ventas": ventas,
+        "linea_credito": dashboard_app.build_linea_credito(),
     }
 
     last_sync = store.last_sync_ok(dashboard_app.cfg["sqlite_path"])
@@ -512,6 +542,23 @@ def main():
     <p class="nota">La info del informe PDF de cada ejecutivo, directamente en pesta&ntilde;as (mes del d&iacute;a "Hasta").</p>
     <div class="pestanas" id="pestanas"></div>
     <div id="panel-vista"></div>
+  </section>
+
+  <section class="tarjeta">
+    <h2>L&iacute;nea de Cr&eacute;dito &#8212; Contactos CREDIMOTOS gestionados</h2>
+    <p class="nota">Del m&oacute;dulo Contactos: contactos con categor&iacute;a CREDIMOTOS asignados al asesor de L&iacute;nea de Cr&eacute;dito (Yohana, Daniel, Claudia). &quot;Gestionados&quot; = tienen solicitud (lead) en el CRM. El detalle muestra la etapa actual del &uacute;ltimo lead.</p>
+    <div style="overflow-x:auto">
+      <table>
+        <thead id="thead-lc"></thead>
+        <tbody id="tbody-lc"></tbody>
+      </table>
+    </div>
+    <div style="overflow-x:auto; margin-top:14px">
+      <table>
+        <thead id="thead-lc-det"></thead>
+        <tbody id="tbody-lc-det"></tbody>
+      </table>
+    </div>
   </section>
 
   <section class="tarjeta">

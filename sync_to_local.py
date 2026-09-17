@@ -66,6 +66,60 @@ def main():
     stage_mapping = cfg.get("stage_mapping", {}) or {s: [s] for s in stage_names}
     print("Etapas CRM:", len(stage_map), "| Etapas del embudo configuradas:", len(stage_names))
 
+    # ---------- Contactos CREDIMOTOS (Línea de Crédito) ----------
+    # Snapshot del modulo contactos: categoria CREDIMOTOS + asesor de Linea de
+    # Credito (x_asesor_linea_credito). Solo lectura.
+    norm_moto = {store.normalize(c["name"]) for c in
+                 client.search_read("res.partner.category", [], ["id", "name"])
+                 if "moto" in store.normalize(c["name"])}
+    if norm_moto:
+        cats = [c["id"] for c in client.search_read("res.partner.category", [], ["id", "name"])
+                if store.normalize(c["name"]) in norm_moto]
+        contacts = client.search_read(
+            "res.partner", [("category_id", "in", cats)],
+            ["id", "name", "x_asesor_linea_credito"])
+        pids = [p["id"] for p in contacts if p["id"]]
+        leads = []
+        for i in range(0, len(pids), 200):
+            batch = pids[i:i + 200]
+            leads += client.search_read(
+                "crm.lead", [("partner_id", "in", batch)],
+                ["id", "partner_id", "stage_id", "create_date", "write_date"])
+        # Ultimo lead (etapa actual) por contacto, por write_date/create_date.
+        funnel2crm = {store.normalize(cn): fn for fn, cns in stage_mapping.items()
+                      for cn in cns}
+        ultimo = {}
+        for l in leads:
+            pid = (l.get("partner_id") or [0])[0]
+            if not pid:
+                continue
+            clave = (l.get("write_date") or "", l.get("create_date") or "", l["id"])
+            if pid not in ultimo or clave > ultimo[pid][0]:
+                ultimo[pid] = (clave, l)
+        rows = []
+        for p in contacts:
+            asesor = p.get("x_asesor_linea_credito") or [0, ""]
+            asesor_uid = asesor[0] if isinstance(asesor, list) else 0
+            asesor_nombre = asesor[1] if isinstance(asesor, list) and len(asesor) > 1 else ""
+            ult = ultimo.get(p["id"])
+            stage_crm = ""
+            stage_funnel = ""
+            lead_id = None
+            if ult:
+                lead = ult[1]
+                lead_id = lead["id"]
+                st = (lead.get("stage_id") or [0, ""])[1] if lead.get("stage_id") else ""
+                stage_crm = st or ""
+                stage_funnel = funnel2crm.get(store.normalize(st), "")
+            rows.append({
+                "partner_id": p["id"], "name": p["name"],
+                "asesor_uid": asesor_uid, "asesor_name": asesor_nombre,
+                "lead_id": lead_id, "lead_stage": stage_crm,
+                "funnel_stage": stage_funnel,
+            })
+        store.upsert_lc_credimotos(cfg["sqlite_path"], rows)
+        print(f"Linea de Credito CREDIMOTOS: {len(rows)} contactos")
+
     # ---------- Actividad 'Atención Puerta' (Contacto Tienda) ----------
     puerta_type_id = None
     puerta_name = cfg.get("store_contact_activity", "")

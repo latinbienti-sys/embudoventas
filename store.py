@@ -91,6 +91,17 @@ def init_db(path):
                 PRIMARY KEY (day, odoo_uid)
             );
 
+            CREATE TABLE IF NOT EXISTS lc_credimotos (
+                partner_id   INTEGER PRIMARY KEY,
+                name         TEXT NOT NULL,
+                asesor_uid   INTEGER,
+                asesor_name  TEXT,
+                lead_id      INTEGER,
+                lead_stage   TEXT,
+                funnel_stage TEXT,
+                updated_at   TEXT
+            );
+
             CREATE TABLE IF NOT EXISTS sync_log (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 run_at      TEXT NOT NULL,
@@ -210,6 +221,23 @@ def upsert_ventas_daily(path, by_day_amounts, tz):
                     "INSERT OR REPLACE INTO ventas_daily (day, odoo_uid, amount) VALUES (?,?,?)",
                     (day.isoformat(), int(uid or 0), float(monto)),
                 )
+        c.commit()
+
+
+def upsert_lc_credimotos(path, rows):
+    """Snapshot completo de contactos CREDIMOTOS (modulo contactos)."""
+    with closing(get_conn(path)) as c:
+        c.execute("DELETE FROM lc_credimotos")
+        for r in rows:
+            c.execute(
+                """INSERT OR REPLACE INTO lc_credimotos
+                   (partner_id, name, asesor_uid, asesor_name, lead_id, lead_stage,
+                    funnel_stage, updated_at)
+                   VALUES (?,?,?,?,?,?,?,datetime('now','localtime'))""",
+                (int(r["partner_id"]), r["name"], r.get("asesor_uid") or None,
+                 r.get("asesor_name") or "", r.get("lead_id"), r.get("lead_stage") or "",
+                 r.get("funnel_stage") or ""),
+            )
         c.commit()
 
 
@@ -350,6 +378,15 @@ def get_ventas_daily_range(path, start, end):
         return [dict(r) for r in c.execute(
             "SELECT day, odoo_uid, amount FROM ventas_daily WHERE day BETWEEN ? AND ?",
             (start.isoformat(), end.isoformat()),
+        )]
+
+
+def get_lc_credimotos(path):
+    """Contactos CREDIMOTOS (snapshot actual del modulo contactos)."""
+    with closing(get_conn(path)) as c:
+        return [dict(r) for r in c.execute(
+            "SELECT partner_id, name, asesor_uid, asesor_name, lead_id, "
+            "lead_stage, funnel_stage FROM lc_credimotos ORDER BY name"
         )]
 
 

@@ -53,7 +53,6 @@
   <h1>Embudo de Ventas &#8226; Latinbien</h1>
   <span class="sub" id="estado-sync"></span>
   <span class="sub">Datos de Odoo en cache local (solo lectura)</span>
-  <a href="/stock" style="margin-left:auto; color:#fff; text-decoration:none; font-size:13px; border:1px solid #fff; border-radius:6px; padding:6px 12px;">Stock en almacenes &rarr;</a>
 </header>
 
 <main>
@@ -166,6 +165,23 @@
     <h2>Vista por ejecutivo (como el PDF del mes)</h2>
     <div class="pestanas" id="pestanas"></div>
     <div id="panel-vista"></div>
+  </section>
+
+  <section class="tarjeta">
+    <h2>L&iacute;nea de Cr&eacute;dito &#8212; Contactos CREDIMOTOS gestionados</h2>
+    <p class="nota">Del m&oacute;dulo Contactos: contactos con categor&iacute;a CREDIMOTOS asignados al asesor de L&iacute;nea de Cr&eacute;dito (Yohana, Daniel, Claudia). "Gestionados" = tienen solicitud (lead) en el CRM. El detalle muestra la etapa actual de &uacute;ltimo lead.</p>
+    <div style="overflow-x:auto">
+      <table>
+        <thead id="thead-lc"></thead>
+        <tbody id="tbody-lc"></tbody>
+      </table>
+    </div>
+    <div class="m2" style="overflow-x:auto">
+      <table>
+        <thead id="thead-lc-det"></thead>
+        <tbody id="tbody-lc-det"></tbody>
+      </table>
+    </div>
   </section>
 </main>
 
@@ -331,9 +347,41 @@ async function carga() {
   // vista por ejecutivo (info del mes, pestanas)
   const V = d.vista;
   if (V) renderVista(V);
+
+  // linea de credito (contactos CREDIMOTOS, modulo contactos)
+  renderLineaCredito(d.linea_credito || {});
 }
 
 let vistaActiva = "";
+
+function renderLineaCredito(lc) {
+  const th = document.getElementById("thead-lc");
+  const tb = document.getElementById("tbody-lc");
+  const thd = document.getElementById("thead-lc-det");
+  const tbd = document.getElementById("tbody-lc-det");
+  if (!lc.team || !lc.team.length) {
+    th.innerHTML = ""; tb.innerHTML = "";
+    thd.innerHTML = ""; tbd.innerHTML = "";
+    return;
+  }
+  const stages = ["total", "gestionados"].concat(Object.keys((lc.totals || {}).por_etapa || {}));
+  th.innerHTML = "<tr><th>Ejecutivo (asesor L&iacute;nea de Cr&eacute;dito)</th>" +
+    stages.map(s => `<th class="num">${s}</th>`).join("") + "</tr>";
+  tb.innerHTML = lc.rows.map(r => {
+    const por = r.por_etapa || {};
+    const celdas = stages.map(s => s === "total" ? r.total : s === "gestionados" ? r.gestionados : (por[s] || 0));
+    return `<tr><td>${(lc.team.find(t => t.norm === r.norm) || {}).nombre || r.norm}</td>` +
+      celdas.map(v => `<td class="num">${v}</td>`).join("") + "</tr>";
+  }).join("");
+  const t = lc.totals || {por_etapa: {}};
+  tb.insertAdjacentHTML("beforeend", "<tr class='total'><td>Total</td>" +
+    stages.map(s => s === "total" ? t.total : s === "gestionados" ? t.gestionados : (t.por_etapa[s] || 0))
+      .map(v => `<td class="num">${v}</td>`).join("") + "</tr>");
+  thd.innerHTML = "<tr><th>Contacto</th><th>Ejecutivo</th><th>Etapa actual del lead</th></tr>";
+  tbd.innerHTML = (lc.detalle || []).map(x =>
+    `<tr><td>${x.nombre}</td><td>${x.asesor}</td><td>${x.etapa}</td></tr>`).join("") ||
+    `<tr><td colspan="3" class="nota">Sin contactos CREDIMOTOS gestionados en el equipo L&iacute;nea de Cr&eacute;dito.</td></tr>`;
+}
 
 function renderVista(V) {
   const items = [V.global, ...V.rows];
